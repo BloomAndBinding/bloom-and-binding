@@ -77,7 +77,10 @@ useEffect(() => {
   source={require("../assets/images/save-leaf.png")}
   style={styles.cornerLeaf}
 />
-  <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+  <TouchableOpacity 
+  style={styles.backButton} 
+  onPress={() => router.dismissTo("/library")}
+>
     <Text style={styles.backText}>‹ Back</Text>
   </TouchableOpacity>
 

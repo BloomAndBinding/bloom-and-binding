@@ -296,7 +296,10 @@ progressValue: status === "Currently Reading" ? progressValue : undefined,
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.replace("/add-book")}
+          >
             <Text style={styles.backText}>‹ Back</Text>
           </TouchableOpacity>
 
@@ -338,7 +341,8 @@ progressValue: status === "Currently Reading" ? progressValue : undefined,
             </View>
           </View>
 
-<View style={styles.dateSection}>
+{(status === "Currently Reading" || status === "Finished") && (
+  <View style={styles.dateSection}>
   <TouchableOpacity
     style={styles.dateRow}
     onPress={() => setActiveDateField("startedAt")}
@@ -362,6 +366,7 @@ progressValue: status === "Currently Reading" ? progressValue : undefined,
         <Text style={styles.dateLabel}>Finished Reading</Text>
         <Text style={styles.dateValue}>{formatDisplayDate(finishedAt)}</Text>
       </View>
+    
 
       <Feather name="calendar" size={22} color="#234028" />
     </TouchableOpacity>
@@ -424,6 +429,7 @@ progressValue: status === "Currently Reading" ? progressValue : undefined,
 </Modal>
 
 </View>
+)}
 
           {status === "Currently Reading" && (
             <View style={styles.progressSection}>
@@ -607,15 +613,15 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-    marginBottom: 14,
+    marginBottom: 16,
     alignSelf: "flex-start",
   },
 
   backText: {
-    color: "#234028",
-    fontSize: 18,
-    fontWeight: "800",
-  },
+  color: "#234028",
+  fontSize: 22,
+  fontFamily: "CormorantGaramond_600SemiBold",
+},
 
   heroRow: {
     flexDirection: "row",
@@ -942,12 +948,8 @@ const styles = StyleSheet.create({
   },
 
   dateSection: {
-  marginTop: 22,
-  backgroundColor: "rgba(115, 149, 104, 0.24)",
-  borderRadius: 16,
-  padding: 16,
-  borderWidth: 1,
-  borderColor: "#D8CDBB",
+  marginTop: 20,
+  marginBottom: -10,
 },
 
 dateRow: {

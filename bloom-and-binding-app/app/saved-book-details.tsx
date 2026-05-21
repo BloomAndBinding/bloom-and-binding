@@ -98,62 +98,38 @@ const [noteDeleteIndex, setNoteDeleteIndex] = useState<number | null>(null);
     { label: "Finished", value: "Finished", icon: "check-circle" },
     ];
 
+  {(status === "Currently Reading" || status === "Finished") && (
   <View style={styles.dateSection}>
-  <Text style={styles.inputLabel}>Started Reading</Text>
+    <TouchableOpacity
+      style={styles.dateRow}
+      onPress={() => setActiveDateField("startedAt")}
+      activeOpacity={0.75}
+    >
+      <View>
+        <Text style={styles.dateLabel}>Started Reading</Text>
+        <Text style={styles.dateValue}>{formatDisplayDate(startedAt)}</Text>
+      </View>
 
-  <TouchableOpacity
-    style={styles.dateButton}
-    onPress={() => setActiveDateField("startedAt")}
-  >
-    <Text style={styles.dateButtonText}>
-      {formatDisplayDate(startedAt)}
-    </Text>
-    <Feather name="calendar" size={18} color="#234028" />
-  </TouchableOpacity>
+      <Feather name="calendar" size={22} color="#234028" />
+    </TouchableOpacity>
 
-  {status === "Finished" && (
-    <>
-      <Text style={styles.inputLabel}>Finished Reading</Text>
-
+    {status === "Finished" && (
       <TouchableOpacity
-        style={styles.dateButton}
+        style={styles.dateRow}
         onPress={() => setActiveDateField("finishedAt")}
+        activeOpacity={0.75}
       >
-        <Text style={styles.dateButtonText}>
-          {formatDisplayDate(finishedAt)}
-        </Text>
-        <Feather name="calendar" size={18} color="#234028" />
+        <View>
+          <Text style={styles.dateLabel}>Finished Reading</Text>
+          <Text style={styles.dateValue}>{formatDisplayDate(finishedAt)}</Text>
+        </View>
+
+        <Feather name="calendar" size={22} color="#234028" />
       </TouchableOpacity>
-    </>
-  )}
+    )}
 
-  {activeDateField && (
-    <DateTimePicker
-      value={
-        activeDateField === "startedAt" && startedAt
-          ? new Date(startedAt)
-          : activeDateField === "finishedAt" && finishedAt
-            ? new Date(finishedAt)
-            : new Date()
-      }
-      mode="date"
-      display="default"
-      onChange={(event, selectedDate) => {
-        setActiveDateField(null);
-
-        if (!selectedDate) return;
-
-        if (activeDateField === "startedAt") {
-          setStartedAt(toIsoDate(selectedDate));
-        }
-
-        if (activeDateField === "finishedAt") {
-          setFinishedAt(toIsoDate(selectedDate));
-        }
-      }}
-    />
-  )}
-</View>
+  </View>
+)}
 
   useEffect(() => {
     const loadBook = async () => {
@@ -581,6 +557,37 @@ const renderDeleteNoteModal = () => (
             </View>
           </View>
 
+{(status === "Currently Reading" || status === "Finished") && (
+  <View style={styles.dateSection}>
+    <TouchableOpacity
+      style={styles.dateRow}
+      onPress={() => setActiveDateField("startedAt")}
+      activeOpacity={0.75}
+    >
+      <View>
+        <Text style={styles.dateLabel}>Started Reading</Text>
+        <Text style={styles.dateValue}>{formatDisplayDate(startedAt)}</Text>
+      </View>
+
+      <Feather name="calendar" size={22} color="#234028" />
+    </TouchableOpacity>
+
+    {status === "Finished" && (
+      <TouchableOpacity
+        style={styles.dateRow}
+        onPress={() => setActiveDateField("finishedAt")}
+        activeOpacity={0.75}
+      >
+        <View>
+          <Text style={styles.dateLabel}>Finished Reading</Text>
+          <Text style={styles.dateValue}>{formatDisplayDate(finishedAt)}</Text>
+        </View>
+
+        <Feather name="calendar" size={22} color="#234028" />
+      </TouchableOpacity>
+    )}
+  </View>
+)}
           {status === "Currently Reading" && (
             <View style={styles.progressSection}>
               {progressType === "percentage" ? (
@@ -727,6 +734,62 @@ const renderDeleteNoteModal = () => (
             <Feather name="trash-2" size={18} color="#A14A4A" />
             <Text style={styles.deleteText}>Remove from Library</Text>
           </TouchableOpacity>
+
+          <Modal
+      visible={activeDateField !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setActiveDateField(null)}
+    >
+      <TouchableOpacity
+        style={styles.dateModalOverlay}
+        activeOpacity={1}
+        onPress={() => setActiveDateField(null)}
+      >
+        <TouchableOpacity
+          style={styles.dateModalCard}
+          activeOpacity={1}
+          onPress={(event) => event.stopPropagation()}
+        >
+          <Text style={styles.dateModalTitle}>
+            {activeDateField === "startedAt"
+              ? "Started Reading"
+              : "Finished Reading"}
+          </Text>
+
+          <DateTimePicker
+            value={
+              activeDateField === "startedAt" && startedAt
+                ? new Date(startedAt)
+                : activeDateField === "finishedAt" && finishedAt
+                  ? new Date(finishedAt)
+                  : new Date()
+            }
+            mode="date"
+            display="spinner"
+            themeVariant="light"
+            onChange={(event, selectedDate) => {
+              if (!selectedDate) return;
+
+              if (activeDateField === "startedAt") {
+                setStartedAt(toIsoDate(selectedDate));
+              }
+
+              if (activeDateField === "finishedAt") {
+                setFinishedAt(toIsoDate(selectedDate));
+              }
+            }}
+          />
+
+          <TouchableOpacity
+            style={styles.dateModalDoneButton}
+            onPress={() => setActiveDateField(null)}
+          >
+            <Text style={styles.dateModalDoneText}>Done</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -1212,32 +1275,74 @@ alertDangerText: {
 },
 
 dateSection: {
-  marginTop: 18,
+  marginTop: 20,
+  marginBottom: -10,
 },
 
-inputLabel: {
-  fontSize: 18,
-  color: "#234028",
-  fontFamily: "CormorantGaramond_600SemiBold",
-  marginBottom: 6,
-},
-
-dateButton: {
-  backgroundColor: "rgba(255, 253, 248, 0.65)",
+dateRow: {
+  backgroundColor: "rgba(255, 253, 248, 0.72)",
   borderWidth: 1,
   borderColor: "#D8CDBB",
-  borderRadius: 14,
-  paddingHorizontal: 14,
-  paddingVertical: 12,
+  borderRadius: 18,
+  paddingHorizontal: 18,
+  paddingVertical: 14,
   marginBottom: 12,
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "space-between",
 },
 
-dateButtonText: {
-  fontSize: 18,
+dateLabel: {
+  fontSize: 16,
+  letterSpacing: 1.2,
+  color: "#6D745F",
+  fontFamily: "CormorantGaramond_600SemiBold",
+  marginBottom: 4,
+},
+
+dateValue: {
+  fontSize: 24,
   color: "#234028",
   fontFamily: "CormorantGaramond_500Medium",
+},
+
+dateModalOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(31, 51, 36, 0.25)",
+  justifyContent: "center",
+  alignItems: "center",
+  paddingHorizontal: 24,
+},
+
+dateModalCard: {
+  width: "90%",
+  borderRadius: 28,
+  backgroundColor: "rgba(255, 248, 238, 0.98)",
+  borderWidth: 1,
+  borderColor: "#D8CDBB",
+  padding: 20,
+},
+
+dateModalTitle: {
+  fontSize: 28,
+  color: "#234028",
+  textAlign: "center",
+  fontFamily: "CormorantGaramond_600SemiBold",
+  marginBottom: 8,
+},
+
+dateModalDoneButton: {
+  alignSelf: "center",
+  marginTop: 10,
+  paddingHorizontal: 24,
+  paddingVertical: 8,
+  borderRadius: 16,
+  backgroundColor: "rgba(185, 190, 167, 0.55)",
+},
+
+dateModalDoneText: {
+  color: "#1f3324",
+  fontSize: 20,
+  fontFamily: "CormorantGaramond_600SemiBold",
 },
 });
