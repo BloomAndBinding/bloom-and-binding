@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { Picker } from "@react-native-picker/picker";
 import {
   View,
   Text,
@@ -7,11 +9,20 @@ import {
   TextInput,
   ImageBackground,
   ScrollView,
+  Keyboard,
+  Pressable,
   TouchableOpacity,
 Modal,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { getSavedBooks, SavedBook } from "../../services/libraryStorage";
+import {
+  getSavedBooks,
+  getYearlyGoal,
+  saveYearlyGoal,
+  getSelectedAvatarKey,
+  saveSelectedAvatarKey,
+  SavedBook,
+} from "../../services/libraryStorage";
 
 const avatarOptions = [
   {
@@ -113,14 +124,22 @@ const selectedAvatar =
   avatarOptions.find((avatar) => avatar.key === selectedAvatarKey) ||
   avatarOptions[0];
 
-  useEffect(() => {
-    loadBooks();
-  }, []);
+  useFocusEffect(
+  useCallback(() => {
+    const loadProfileData = async () => {
+      const books = await getSavedBooks();
+      const savedGoal = await getYearlyGoal();
+      const savedAvatarKey = await getSelectedAvatarKey();
+      setSelectedAvatarKey(savedAvatarKey);
+      setSavedBooks(books);
+      setYearlyGoal(savedGoal);
+      setGoalInput(String(savedGoal));
+    };
 
-  const loadBooks = async () => {
-    const books = await getSavedBooks();
-    setSavedBooks(books);
-  };
+    loadProfileData();
+  }, [])
+);
+
 
   const booksOwned = savedBooks.length;
 
@@ -278,112 +297,60 @@ const goalProgress = Math.min(booksFinishedThisYear / yearlyGoal, 1);
   onRequestClose={() => setAvatarPickerOpen(false)}
 >
   <TouchableOpacity
-  style={styles.avatarModalOverlay}
-  activeOpacity={1}
-  onPress={() => setAvatarPickerOpen(false)}
->
-  <TouchableOpacity
-    style={styles.avatarModalCard}
+    style={styles.avatarModalOverlay}
     activeOpacity={1}
-    onPress={(event) => event.stopPropagation()}
-  >
-      <View style={styles.avatarTitleRow}>
-  <Image
-    source={require("../../assets//images/leaf-sprig.png")}
-    style={styles.avatarTitleLeafLeft}
-    resizeMode="contain"
-  />
-
-  <Text style={styles.avatarModalTitle}>
-    Choose Your Reading Persona
-  </Text>
-
-  <Image
-    source={require("../../assets/images/leaf-sprig.png")}
-    style={styles.avatarTitleLeafRight}
-    resizeMode="contain"
-  />
-</View>
-
-</TouchableOpacity>
-</TouchableOpacity>
-</Modal>
-
-<Modal
-  visible={goalEditorOpen}
-  transparent
-  animationType="fade"
-  onRequestClose={() => setGoalEditorOpen(false)}
->
-  <TouchableOpacity
-    style={styles.goalModalOverlay}
-    activeOpacity={1}
-    onPress={() => setGoalEditorOpen(false)}
+    onPress={() => setAvatarPickerOpen(false)}
   >
     <TouchableOpacity
-      style={styles.goalModalCard}
+      style={styles.avatarModalCard}
       activeOpacity={1}
       onPress={(event) => event.stopPropagation()}
     >
-      <Text style={styles.goalModalTitle}>Edit Reading Goal</Text>
+      <View style={styles.avatarTitleRow}>
+        <Image
+          source={require("../../assets/images/leaf-sprig.png")}
+          style={styles.avatarTitleLeafLeft}
+          resizeMode="contain"
+        />
 
-      <TextInput
-        style={styles.goalInput}
-        keyboardType="number-pad"
-        value={goalInput}
-        onChangeText={setGoalInput}
-        placeholder="24"
-        placeholderTextColor="#8A7D6F"
-      />
+        <Text style={styles.avatarModalTitle}>
+          Choose Your Reading Persona
+        </Text>
 
-      <TouchableOpacity
-        style={styles.goalSaveButton}
-        onPress={() => {
-          const nextGoal = Number(goalInput);
+        <Image
+          source={require("../../assets/images/leaf-sprig.png")}
+          style={styles.avatarTitleLeafRight}
+          resizeMode="contain"
+        />
+      </View>
 
-          if (!Number.isNaN(nextGoal) && nextGoal > 0) {
-            setYearlyGoal(nextGoal);
-          }
-
-          setGoalEditorOpen(false);
-        }}
+      <ScrollView
+        style={styles.avatarScroll}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.goalSaveText}>Save Goal</Text>
-      </TouchableOpacity>
+        <View style={styles.avatarGrid}>
+          {avatarOptions.map((avatar) => (
+            <TouchableOpacity
+              key={avatar.key}
+              style={[
+                styles.avatarChoice,
+                selectedAvatarKey === avatar.key && styles.avatarChoiceActive,
+              ]}
+              onPress={async () => {
+                setSelectedAvatarKey(avatar.key);
+await saveSelectedAvatarKey(avatar.key);
+setAvatarPickerOpen(false);
+              }}
+            >
+              <Image source={avatar.image} style={styles.avatarOptionImage} />
+              <Text style={styles.avatarChoiceLabel}>{avatar.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
     </TouchableOpacity>
   </TouchableOpacity>
 </Modal>
-
-      <ScrollView
-  style={styles.avatarScroll}
-  showsVerticalScrollIndicator={false}
->
-  <View style={styles.avatarGrid}>
-    {avatarOptions.map((avatar) => (
-          <TouchableOpacity
-            key={avatar.key}
-            style={[
-              styles.avatarChoice,
-              selectedAvatarKey === avatar.key && styles.avatarChoiceActive,
-            ]}
-            onPress={() => {
-              setSelectedAvatarKey(avatar.key);
-              setAvatarPickerOpen(false);
-            }}
-          >
-            <Image source={avatar.image} style={styles.avatarOptionImage} />
-            <Text style={styles.avatarChoiceLabel}>{avatar.label}</Text>
-          </TouchableOpacity>
-        ))}
-        </View>
-</ScrollView>
-
-<TouchableOpacity
-  style={styles.avatarDoneButton}
-        onPress={() => setAvatarPickerOpen(false)}
-      >
-        <Text style={styles.avatarDoneText}>Done</Text>
-      </TouchableOpacity>
       
       </ScrollView>
     </ImageBackground>
@@ -863,6 +830,26 @@ goalSaveButton: {
 goalSaveText: {
   color: "#1f3324",
   fontSize: 20,
+  fontFamily: "CormorantGaramond_600SemiBold",
+},
+
+goalModalBackdrop: {
+  ...StyleSheet.absoluteFillObject,
+},
+
+goalPickerWrap: {
+  height: 170,
+  backgroundColor: "rgba(255, 253, 248, 0.7)",
+  borderWidth: 1,
+  borderColor: "#D8CDBB",
+  borderRadius: 18,
+  overflow: "hidden",
+  marginBottom: 16,
+},
+
+goalPickerItem: {
+  fontSize: 24,
+  color: "#234028",
   fontFamily: "CormorantGaramond_600SemiBold",
 },
 });

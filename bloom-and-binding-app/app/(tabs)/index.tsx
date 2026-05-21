@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
-import { getSavedBooks, SavedBook } from "../../services/libraryStorage";
+import React, { useCallback, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { Picker } from "@react-native-picker/picker";
+import { getSavedBooks, SavedBook, getYearlyGoal, saveYearlyGoal } from "../../services/libraryStorage";
 import {
   View,
   Text,
@@ -9,14 +10,18 @@ import {
   TouchableOpacity,
   StyleSheet,
   ImageBackground,
+  Modal,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Feather from "@expo/vector-icons/build/Feather";
+
 
 export default function HomeScreen() {
   const router = useRouter();
   const [savedBooks, setSavedBooks] = useState<SavedBook[]>([]);
-
+const [yearlyGoal, setYearlyGoal] = useState(24);
+const [goalEditorOpen, setGoalEditorOpen] = useState(false);
   const getGreeting = () => {
     const hour = new Date().getHours();
 
@@ -25,16 +30,21 @@ export default function HomeScreen() {
     return "Good evening";
   };
 
-  useEffect(() => {
+  useFocusEffect(
+  useCallback(() => {
+    const loadBooks = async () => {
+      const books = await getSavedBooks();
+      const savedGoal = await getYearlyGoal();
+
+      setSavedBooks(books);
+      setYearlyGoal(savedGoal);
+    };
+
     loadBooks();
-  }, []);
+  }, [])
+);
 
-  const loadBooks = async () => {
-    const books = await getSavedBooks();
-    setSavedBooks(books);
-  };
-
-  const currentlyReading = savedBooks.find(
+const currentlyReading = savedBooks.find(
     (book) => book.status === "Currently Reading"
   );
 
@@ -44,6 +54,15 @@ export default function HomeScreen() {
     currentlyReading?.progressType === "percentage"
       ? Number(currentlyReading.progressValue || 0)
       : 0;
+
+      const currentYear = new Date().getFullYear();
+
+const booksFinishedThisYear = savedBooks.filter((book) => {
+  if (book.status !== "Finished" || !book.finishedAt) return false;
+  return new Date(book.finishedAt).getFullYear() === currentYear;
+}).length;
+
+const goalProgress = Math.min(booksFinishedThisYear / yearlyGoal, 1);
 
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
@@ -150,6 +169,34 @@ export default function HomeScreen() {
           )}
         </View>
 
+<TouchableOpacity
+  style={styles.goalCard}
+  activeOpacity={0.85}
+  onPress={() => setGoalEditorOpen(true)}
+>
+  <View style={styles.goalHeader}>
+    <Text style={styles.goalTitle}>{currentYear} Reading Goal</Text>
+    <View style={styles.goalCountRow}>
+  <Text style={styles.goalCount}>
+    {booksFinishedThisYear} / {yearlyGoal}
+  </Text>
+
+  <Feather name="edit-2" size={14} color="#234028" />
+</View>
+  </View>
+
+  <View style={styles.goalProgressTrack}>
+    <View
+      style={[
+        styles.goalProgressFill,
+        { width: `${goalProgress * 100}%` },
+      ]}
+    />
+  </View>
+
+  <Text style={styles.goalSubtext}>books completed this year</Text>
+</TouchableOpacity>
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recently Added</Text>
@@ -221,6 +268,47 @@ export default function HomeScreen() {
         </View>
 
         <View style={{ height: 40 }} />
+
+        <Modal
+  visible={goalEditorOpen}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setGoalEditorOpen(false)}
+>
+  <View style={styles.goalModalOverlay}>
+    <TouchableOpacity
+      style={styles.goalModalBackdrop}
+      activeOpacity={1}
+      onPress={() => setGoalEditorOpen(false)}
+    />
+
+    <View style={styles.goalModalCard}>
+      <View style={styles.goalPickerWrap}>
+        <Picker
+          selectedValue={yearlyGoal}
+          onValueChange={(value) => {
+            setYearlyGoal(value);
+          }}
+          itemStyle={styles.goalPickerItem}
+        >
+          {Array.from({ length: 200 }, (_, index) => index + 1).map((goal) => (
+            <Picker.Item key={goal} label={`${goal}`} value={goal} />
+          ))}
+        </Picker>
+      </View>
+
+      <TouchableOpacity
+        style={styles.goalSaveButton}
+        onPress={async () => {
+          await saveYearlyGoal(yearlyGoal);
+          setGoalEditorOpen(false);
+        }}
+      >
+        <Text style={styles.goalSaveText}>Save Goal</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -512,4 +600,139 @@ emptyText: {
   fontFamily: "CormorantGaramond_500Medium",
   textAlign: "center",
 },
+
+goalCard: {
+  backgroundColor: "rgba(255, 248, 238, 0.62)",
+  borderWidth: 1,
+  borderColor: "#D8CDBB",
+  borderRadius: 24,
+  padding: 18,
+  marginTop: 18,
+  marginBottom: -12,
+  marginHorizontal: 20,
+},
+
+goalHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 14,
+},
+
+goalTitle: {
+  fontSize: 26,
+  color: "#234028",
+  fontFamily: "CormorantGaramond_600SemiBold",
+},
+
+goalCount: {
+  fontSize: 22,
+  color: "#234028",
+  fontFamily: "CormorantGaramond_600SemiBold",
+},
+
+goalProgressTrack: {
+  height: 12,
+  backgroundColor: "rgba(216, 205, 187, 0.55)",
+  borderRadius: 99,
+  overflow: "hidden",
+},
+
+goalProgressFill: {
+  height: "100%",
+  backgroundColor: "#A8B39A",
+  borderRadius: 99,
+},
+
+goalSubtext: {
+  marginTop: 10,
+  fontSize: 16,
+  color: "#6D745F",
+  fontFamily: "CormorantGaramond_500Medium",
+},
+
+goalEditButton: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+},
+
+goalModalOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(31, 51, 36, 0.25)",
+  justifyContent: "center",
+  alignItems: "center",
+  paddingHorizontal: 24,
+},
+
+goalModalCard: {
+  width: "90%",
+  borderRadius: 28,
+  backgroundColor: "rgba(255, 248, 238, 0.97)",
+  borderWidth: 1,
+  borderColor: "#D8CDBB",
+  padding: 22,
+},
+
+goalModalTitle: {
+  fontSize: 28,
+  color: "#234028",
+  textAlign: "center",
+  fontFamily: "CormorantGaramond_600SemiBold",
+  marginBottom: 16,
+},
+
+goalInput: {
+  backgroundColor: "rgba(255, 253, 248, 0.7)",
+  borderWidth: 1,
+  borderColor: "#D8CDBB",
+  borderRadius: 18,
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  fontSize: 24,
+  color: "#234028",
+  textAlign: "center",
+  fontFamily: "CormorantGaramond_600SemiBold",
+  marginBottom: 16,
+},
+
+goalSaveButton: {
+  backgroundColor: "#b9bea7",
+  borderRadius: 18,
+  paddingVertical: 13,
+  alignItems: "center",
+},
+
+goalSaveText: {
+  color: "#1f3324",
+  fontSize: 20,
+  fontFamily: "CormorantGaramond_600SemiBold",
+},
+
+goalModalBackdrop: {
+  ...StyleSheet.absoluteFillObject,
+},
+
+goalPickerWrap: {
+  height: 170,
+  backgroundColor: "rgba(255, 253, 248, 0.7)",
+  borderWidth: 1,
+  borderColor: "#D8CDBB",
+  borderRadius: 18,
+  overflow: "hidden",
+  marginBottom: 16,
+},
+
+goalPickerItem: {
+  fontSize: 24,
+  color: "#234028",
+  fontFamily: "CormorantGaramond_600SemiBold",
+},
+
+goalCountRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+},
+
 });
