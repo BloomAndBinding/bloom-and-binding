@@ -70,7 +70,7 @@ export default function TabLayout() {
           name="index"
           options={{
             tabBarIcon: ({ color }) => (
-              <ShiftedIcon name="home" color={color} shift={-4} />
+              <ShiftedIcon name="home" color={color} shift={-6} />
             ),
           }}
         />
@@ -79,7 +79,10 @@ export default function TabLayout() {
           name="library"
           options={{
             tabBarIcon: ({ color }) => (
-              <ShiftedIcon name="book-open" color={color} shift={-22} />
+              <ShiftedIcon 
+              name="book-open" 
+              color={color} 
+              shift={-26} />
             ),
           }}
         />
@@ -91,7 +94,7 @@ export default function TabLayout() {
               <ShiftedIcon
                 name="message-circle"
                 color={color}
-                shift={22}
+                shift={26}
               />
             ),
           }}
@@ -101,7 +104,7 @@ export default function TabLayout() {
           name="profile"
           options={{
             tabBarIcon: ({ color }) => (
-              <ShiftedIcon name="user" color={color} shift={14} />
+              <ShiftedIcon name="user" color={color} shift={6} />
             ),
           }}
         />

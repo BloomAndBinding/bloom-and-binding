@@ -50,7 +50,7 @@ export default function LoginScreen() {
             <TouchableOpacity
   style={[styles.button, styles.emailButton]}
   activeOpacity={0.85}
-  onPress={() => router.replace("/(tabs)/library")}
+  onPress={() => router.replace("/(tabs)")}
             >
               <Feather name="book-open" size={20} color="#4a3d33" />
               <Text style={styles.emailText}>Sign up with Email</Text>
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
 
   button: {
     height: 62,
-    borderRadius: 999,
+    borderRadius: 18,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -107,50 +107,54 @@ const styles = StyleSheet.create({
   },
 
   appleButton: {
-    backgroundColor: "#000",
+    backgroundColor: "#1F1B17",
   },
 
   googleButton: {
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(247, 239, 226, 0.96)",
   },
 
   emailButton: {
-    backgroundColor: "rgba(244, 232, 214, 0.96)",
+    backgroundColor: "rgba(247, 239, 226, 0.96)",
   },
 
   appleText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
+    color: "#F7F0E4",
+    fontSize: 22,
+    fontFamily: "CormorantGaramond_600SemiBold",
+    letterSpacing: 0.2,
   },
 
   googleText: {
-    color: "#2d241d",
-    fontSize: 18,
-    fontWeight: "600",
+    color: "#234028",
+    fontSize: 22,
+    fontFamily: "CormorantGaramond_600SemiBold",
+    letterSpacing: 0.2,
   },
 
   emailText: {
-    color: "#4a3d33",
-    fontSize: 18,
-    fontWeight: "600",
+    color: "#234028",
+    fontSize: 22,
+    fontFamily: "CormorantGaramond_600SemiBold",
+    letterSpacing: 0.2,
   },
 
   appleIcon: {
-    color: "#fff",
+    color: "#F7F0E4",
     fontSize: 28,
   },
 
   signInText: {
     textAlign: "center",
-    color: "#f5ede2",
-    fontSize: 16,
-    marginTop: 6,
+    color: "#F7F0E4",
+    fontSize: 18,
+    marginTop: 8,
+    fontFamily: "CormorantGaramond_500Medium",
   },
 
   signInLink: {
     textDecorationLine: "underline",
-    color: "#ffffff",
-    fontWeight: "600",
+    color: "#F7F0E4",
+    fontFamily: "CormorantGaramond_600SemiBold",
   },
 });

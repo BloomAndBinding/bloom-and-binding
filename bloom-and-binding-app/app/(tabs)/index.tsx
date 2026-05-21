@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "expo-router";
+import { getSavedBooks, SavedBook } from "../../services/libraryStorage";
 import {
   View,
   Text,
@@ -12,6 +14,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const [savedBooks, setSavedBooks] = useState<SavedBook[]>([]);
+
   const getGreeting = () => {
     const hour = new Date().getHours();
 
@@ -20,6 +25,26 @@ export default function HomeScreen() {
     return "Good evening";
   };
 
+  useEffect(() => {
+    loadBooks();
+  }, []);
+
+  const loadBooks = async () => {
+    const books = await getSavedBooks();
+    setSavedBooks(books);
+  };
+
+  const currentlyReading = savedBooks.find(
+    (book) => book.status === "Currently Reading"
+  );
+
+  const recentlyAdded = [...savedBooks].reverse().slice(0, 3);
+
+  const progressPercent =
+    currentlyReading?.progressType === "percentage"
+      ? Number(currentlyReading.progressValue || 0)
+      : 0;
+
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
       <ScrollView
@@ -27,7 +52,6 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* HERO */}
         <ImageBackground
           source={require("../../assets/images/hero-header.png")}
           style={styles.heroWrap}
@@ -45,76 +69,123 @@ export default function HomeScreen() {
 
           <View style={styles.heroTextWrap}>
             <Text style={styles.greeting}>{getGreeting()},</Text>
-            <Text style={styles.name}>Brittany</Text>
+            <Text style={styles.name}>Brittany!</Text>
             <Text style={styles.subGreeting}>
               Welcome back to your reading sanctuary!
             </Text>
           </View>
         </ImageBackground>
 
-        {/* CURRENTLY READING */}
         <View style={styles.currentCard}>
           <Text style={styles.currentLabel}>CURRENTLY READING</Text>
 
-          <View style={styles.currentContent}>
-            <Image
-              source={{
-                uri: "https://covers.openlibrary.org/b/isbn/9780061120084-L.jpg",
-              }}
-              style={styles.bookCover}
-            />
+          {currentlyReading ? (
+            <>
+              <View style={styles.currentContent}>
+                {currentlyReading.coverUrl ? (
+                  <Image
+                    source={{ uri: currentlyReading.coverUrl }}
+                    style={styles.bookCover}
+                  />
+                ) : (
+                  <View style={styles.coverPlaceholder} />
+                )}
 
-            <View style={styles.currentInfo}>
-              <Text style={styles.bookTitle}>To Kill a Mockingbird</Text>
-              <Text style={styles.bookAuthor}>Harper Lee</Text>
+                <View style={styles.currentInfo}>
+                  <Text style={styles.bookTitle}>{currentlyReading.title}</Text>
+                  <Text style={styles.bookAuthor}>{currentlyReading.author}</Text>
 
-              <View style={styles.metaRow}>
-                <Text style={styles.metaTag}>Hardcover</Text>
-                <Text style={styles.metaDate}>Started May 8</Text>
+                  <View style={styles.metaRow}>
+                    {currentlyReading.formats?.[0] && (
+                      <Text style={styles.metaTag}>
+                        {currentlyReading.formats[0]}
+                      </Text>
+                    )}
+                  </View>
+
+                  <Text style={styles.progressText}>
+  {currentlyReading.progressType === "page"
+    ? `Page ${currentlyReading.progressValue || "0"}`
+    : `${progressPercent}% complete`}
+</Text>
+
+<View style={styles.progressBarBg}>
+  <View
+    style={[
+      styles.progressBarFill,
+      {
+        width:
+          currentlyReading.progressType === "percentage"
+            ? `${progressPercent}%`
+            : "0%",
+      },
+    ]}
+  />
+</View>
+                </View>
               </View>
 
-              <Text style={styles.progressText}>68% complete</Text>
-
-              <View style={styles.progressBarBg}>
-                <View style={styles.progressBarFill} />
-              </View>
+              <TouchableOpacity
+                style={styles.updateButton}
+                onPress={() =>
+                  router.push({
+                    pathname: "/saved-book-details",
+                    params: {
+  id: currentlyReading.id,
+  returnTo: "home",
+},
+                  })
+                }
+              >
+                <Text style={styles.updateButtonText}>Update Progress</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No current read</Text>
+              <Text style={styles.emptyText}>
+                Pick your next adventure from the library 📚
+              </Text>
             </View>
-          </View>
-
-          <TouchableOpacity style={styles.updateButton}>
-            <Text style={styles.updateButtonText}>Update Progress</Text>
-          </TouchableOpacity>
+          )}
         </View>
 
-        {/* RECENTLY ADDED */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recently Added</Text>
-            <Text style={styles.sectionLink}>See All</Text>
           </View>
 
           <View style={styles.bookRow}>
-            <Image
-              source={{
-                uri: "https://covers.openlibrary.org/b/isbn/9780141439600-L.jpg",
-              }}
-              style={styles.smallBook}
-            />
-            <Image
-              source={{
-                uri: "https://covers.openlibrary.org/b/isbn/9780062315007-L.jpg",
-              }}
-              style={styles.smallBook}
-            />
-           <Image
-  source={{
-    uri: "https://covers.openlibrary.org/b/isbn/9780553213119-L.jpg",
-  }}
-  style={styles.smallBook}
-            />
-          </View>
+  {recentlyAdded.length > 0 ? (
+    recentlyAdded.map((book) => (
+      <TouchableOpacity
+        key={book.id}
+        onPress={() =>
+          router.push({
+            pathname: "/saved-book-details",
+            params: {
+  id: book.id,
+  returnTo: "home",
+},
+          })
+        }
+      >
+        {book.coverUrl ? (
+          <Image
+            source={{ uri: book.coverUrl }}
+            style={styles.smallBook}
+          />
+        ) : (
+          <View style={styles.smallPlaceholder} />
+        )}
+      </TouchableOpacity>
+    ))
+  ) : (
+    <Text style={styles.emptyText}>Your library is waiting 🌿</Text>
+  )}
+</View>
         </View>
-        {/* CONSERVATORY */}
+
         <View style={styles.section}>
           <ImageBackground
             source={require("../../assets/images/conservatory-preview.png")}
@@ -136,10 +207,13 @@ export default function HomeScreen() {
             <View style={styles.conservatoryOverlay}>
               <Text style={styles.conservatoryTitle}>Your Conservatory</Text>
               <Text style={styles.conservatoryText}>
-                A blooming record of every story you’ve finished.
+                {"A blooming record\nof every story\nyou’ve finished."}
               </Text>
 
-              <TouchableOpacity style={styles.visitButton}>
+              <TouchableOpacity
+  style={styles.visitButton}
+  onPress={() => router.push("/(tabs)/conservatory")}
+>
                 <Text style={styles.visitButtonText}>Enter Conservatory</Text>
               </TouchableOpacity>
             </View>
@@ -164,9 +238,9 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-  backgroundColor: "#f6ead8",
-  paddingBottom: 80,
-},
+    backgroundColor: "#f6ead8",
+    paddingBottom: 80,
+  },
 
   heroWrap: {
     height: 285,
@@ -183,22 +257,22 @@ const styles = StyleSheet.create({
   },
 
   greeting: {
-    fontSize: 24,
-    fontFamily: "Georgia",
+    fontSize: 30,
+    fontFamily: "CormorantGaramond_500Medium",
     color: "#1f3324",
   },
 
   name: {
-    fontSize: 48,
-    fontFamily: "Georgia",
+    fontSize: 46,
+    fontFamily: "CormorantGaramond_600SemiBold",
     color: "#1f3324",
-    marginTop: -2,
+    marginTop: -6,
   },
 
   subGreeting: {
     marginTop: 4,
-    fontSize: 18,
-    fontFamily: "Georgia",
+    fontSize: 22,
+    fontFamily: "CormorantGaramond_500Medium",
     color: "#2b4430",
   },
 
@@ -239,48 +313,49 @@ const styles = StyleSheet.create({
   },
 
   bookTitle: {
-    color: "#fff",
-    fontSize: 21,
-    fontFamily: "Georgia",
+    color: "#F7F0E4",
+    fontSize: 28,
+    lineHeight: 30,
+    fontFamily: "CormorantGaramond_600SemiBold",
   },
 
   bookAuthor: {
     color: "#e5eee2",
-    fontSize: 16,
-    fontFamily: "Georgia",
-    marginTop: 6,
+    fontSize: 20,
+    fontFamily: "CormorantGaramond_500Medium",
+    marginTop: 4,
   },
 
   metaRow: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 20,
+    marginTop: 18,
     flexWrap: "wrap",
   },
 
   metaTag: {
     backgroundColor: "rgba(255,255,255,0.16)",
-    color: "#fff",
+    color: "#F7F0E4",
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 1005,
+    borderRadius: 999,
     fontSize: 12,
   },
 
   metaDate: {
     backgroundColor: "rgba(255,255,255,0.16)",
-    color: "#fff",
+    color: "#F7F0E4",
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 1005,
+    borderRadius: 999,
     fontSize: 12,
   },
 
   progressText: {
-    color: "#fff",
-    marginTop: 20,
-    fontSize: 14,
-    fontWeight: "600",
+    color: "#F7F0E4",
+    marginTop: 18,
+    fontSize: 16,
+    fontFamily: "CormorantGaramond_600SemiBold",
   },
 
   progressBarBg: {
@@ -304,14 +379,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(244,232,214,0.10)",
     paddingVertical: 14,
-    borderRadius: 999,
+    borderRadius: 14,
     alignItems: "center",
   },
 
   updateButtonText: {
-    color: "#ffffff",
-    fontFamily: "Georgia",
-    fontSize: 15,
+    color: "#F7F0E4",
+    fontFamily: "CormorantGaramond_600SemiBold",
+    fontSize: 20,
   },
 
   section: {
@@ -326,15 +401,15 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 24,
-    fontFamily: "Georgia",
+    fontSize: 32,
+    fontFamily: "CormorantGaramond_600SemiBold",
     color: "#2f261f",
   },
 
   sectionLink: {
     color: "#6f6257",
-    fontSize: 15,
-    fontFamily: "Georgia",
+    fontSize: 20,
+    fontFamily: "CormorantGaramond_500Medium",
   },
 
   bookRow: {
@@ -360,6 +435,7 @@ const styles = StyleSheet.create({
 
   conservatoryImage: {
     borderRadius: 28,
+    opacity: 0.98,
   },
 
   conservatoryFade: {
@@ -368,38 +444,72 @@ const styles = StyleSheet.create({
 
   conservatoryOverlay: {
     padding: 20,
-    width: "52%",
+    width: "60%",
     justifyContent: "flex-end",
   },
 
   conservatoryTitle: {
     fontSize: 24,
-    fontFamily: "Georgia",
+    fontFamily: "CormorantGaramond_600SemiBold",
     color: "#2f261f",
   },
 
   conservatoryText: {
-    marginTop: 8,
-    fontSize: 15,
-    fontFamily: "Georgia",
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: "600",
+    fontFamily: "CormorantGaramond_500Medium",
     color: "#5f5147",
     lineHeight: 24,
   },
 
-visitButton: {
-  marginTop: 12,
-  alignSelf: "flex-start",
-  backgroundColor: "rgba(31,51,36,0.18)",
-  borderWidth: 1,
-  borderColor: "rgba(31,51,36,0.10)",
-  paddingHorizontal: 18,
-  paddingVertical: 12,
-  borderRadius: 999,
+  visitButton: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(31,51,36,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(31,51,36,0.10)",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
   },
 
   visitButtonText: {
-   color: "#1f3324",
-    fontFamily: "Georgia",
-    fontSize: 15,
+    color: "#1f3324",
+    fontFamily: "CormorantGaramond_600SemiBold",
+    fontSize: 20,
   },
+
+  coverPlaceholder: {
+  width: 110,
+  height: 160,
+  borderRadius: 14,
+  backgroundColor: "rgba(255,255,255,0.14)",
+},
+
+smallPlaceholder: {
+  width: 110,
+  height: 175,
+  borderRadius: 14,
+  backgroundColor: "#D8CDBB",
+},
+
+emptyState: {
+  paddingVertical: 24,
+  alignItems: "center",
+},
+
+emptyTitle: {
+  color: "#F7F0E4",
+  fontSize: 26,
+  fontFamily: "CormorantGaramond_600SemiBold",
+},
+
+emptyText: {
+  color: "#E5EEE2",
+  fontSize: 18,
+  marginTop: 6,
+  fontFamily: "CormorantGaramond_500Medium",
+  textAlign: "center",
+},
 });

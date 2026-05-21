@@ -12,93 +12,76 @@ import {
 import { BlurView } from "expo-blur";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+type PotStyle = "default" | "premium";
+
 type PotData = {
   id: string;
   genre: string;
   flower: string;
   meaning: string;
   books: string[];
-  potStyle: any;
-  flowerAsset?: any;
-
+  readCount: number;
+  potStyle: PotStyle;
   position: {
     top: number;
     left: number;
   };
-
-  potSize: {
-    width: number;
-    height: number;
-  };
-
-  flowerSize: {
-    width: number;
-    height: number;
-  };
-
-  flowerOffset: {
-    top: number;
-  };
 };
+
+const potAssets = {
+  default: require("../../assets/images/default-pot.png"),
+  premium: require("../../assets/images/ornate-stone-pot.png"),
+};
+
+const peonyAssets = {
+  1: require("../../assets/images/peony.png"),
+  2: require("../../assets/images/peony-2.png"),
+  3: require("../../assets/images/peony-3.png"),
+  4: require("../../assets/images/peony-4.png"),
+  complete: require("../../assets/images/peony-complete.png"),
+};
+
+function getPeonyAsset(readCount: number) {
+  if (readCount >= 5) return peonyAssets.complete;
+  if (readCount === 4) return peonyAssets[4];
+  if (readCount === 3) return peonyAssets[3];
+  if (readCount === 2) return peonyAssets[2];
+  return peonyAssets[1];
+}
 
 const samplePots: PotData[] = [
   {
     id: "1",
     genre: "Romance",
     flower: "Peony",
-    meaning: "Peonies symbolize love and devotion.",
+    meaning:
+      "Peonies symbolize love, devotion, and emotional abundance—a fitting bloom for stories of longing, passion, and happily-ever-afters.",
     books: ["Fourth Wing"],
-flowerAsset: require("../../assets/images/peony.png"),
-    potStyle: require("../../assets/images/default-pot.png"),
-
-    flowerSize: {
-      width: 120,
-      height: 135,
-    },
-
-    flowerOffset: {
-      top: 68,
-    },
-
-        position: {
-      top: 420,
-      left: 70,
-    },
-
-    potSize: {
-      width: 95,
-      height: 95,
-    },
+    readCount: 1,
+    potStyle: "default",
+    position: { top: 355, left: 65 },
   },
-
   {
     id: "2",
+    genre: "Romance",
+    flower: "Peony",
+    meaning:
+      "A fuller peony arrangement marks a growing collection of romantic stories.",
+    books: ["Fourth Wing", "The Notebook", "Pride & Prejudice"],
+    readCount: 3,
+    potStyle: "default",
+    position: { top: 355, left: 170 },
+  },
+  {
+    id: "3",
     genre: "Premium Romance",
     flower: "Peony",
-    meaning: "Premium users can customize pot styles.",
-    books: ["Fourth Wing"],
-
-    potStyle: require("../../assets/images/ornate-stone-pot.png"),
-    flowerAsset: require("../../assets/images/peony.png"),
-
-    position: {
-      top: 395,
-      left: 220,
-    },
-
-    potSize: {
-      width: 125,
-      height: 150,
-    },
-
-    flowerSize: {
-      width: 120,
-      height: 135,
-    },
-
-    flowerOffset: {
-      top: 46,
-    },
+    meaning:
+      "Premium users can customize pot styles while keeping their floral collection.",
+    books: ["Fourth Wing", "The Notebook", "Pride & Prejudice", "Beach Read", "Book Lovers"],
+    readCount: 5,
+    potStyle: "premium",
+    position: { top: 360, left: 275 },
   },
 ];
 
@@ -109,6 +92,14 @@ function PotSpot({
   pot: PotData;
   onPress: () => void;
 }) {
+  const isPremium = pot.potStyle === "premium";
+
+  const potSize = isPremium
+    ? { width: 95, height: 115 }
+    : { width: 95, height: 95 };
+
+  const flowerTop = isPremium ? 46 : 68;
+
   return (
     <TouchableOpacity
       style={[
@@ -122,30 +113,27 @@ function PotSpot({
       onPress={onPress}
     >
       <Image
-  source={pot.potStyle}
-  resizeMode="contain"
-  style={{
-    position: "absolute",
-    width: pot.potSize.width,
-    height: pot.potSize.height,
-    bottom: 0,
-    zIndex: 2,
-  }}
-/>
+        source={potAssets[pot.potStyle]}
+        resizeMode="contain"
+        style={[
+          styles.potImage,
+          {
+            width: potSize.width,
+            height: potSize.height,
+          },
+        ]}
+      />
 
-{pot.flowerAsset && (
-  <Image
-    source={pot.flowerAsset}
-    resizeMode="contain"
-    style={{
-      position: "absolute",
-      width: pot.flowerSize.width,
-      height: pot.flowerSize.height,
-      top: pot.flowerOffset.top,
-      zIndex: 3,
-    }}
-  />
-)}
+      <Image
+        source={getPeonyAsset(pot.readCount)}
+        resizeMode="contain"
+        style={[
+          styles.flowerImage,
+          {
+            top: flowerTop,
+          },
+        ]}
+      />
     </TouchableOpacity>
   );
 }
@@ -175,21 +163,13 @@ export default function ConservatoryScreen() {
               onPress={() => setSelectedPot(null)}
             >
               <Pressable style={styles.modalCard}>
-                <Text style={styles.genreTitle}>
-                  {selectedPot?.genre}
-                </Text>
+                <Text style={styles.genreTitle}>{selectedPot?.genre}</Text>
 
-                <Text style={styles.flowerName}>
-                  {selectedPot?.flower}
-                </Text>
+                <Text style={styles.flowerName}>{selectedPot?.flower}</Text>
 
-                <Text style={styles.meaning}>
-                  {selectedPot?.meaning}
-                </Text>
+                <Text style={styles.meaning}>{selectedPot?.meaning}</Text>
 
-                <Text style={styles.booksHeader}>
-                  Books in Bloom
-                </Text>
+                <Text style={styles.booksHeader}>Books in Bloom</Text>
 
                 {selectedPot?.books.map((book, index) => (
                   <Text key={index} style={styles.bookItem}>
@@ -217,7 +197,7 @@ const styles = StyleSheet.create({
 
   potContainer: {
     position: "absolute",
-    width: 150,
+    width: 120,
     height: 220,
     alignItems: "center",
 
@@ -228,6 +208,19 @@ const styles = StyleSheet.create({
       width: 0,
       height: 6,
     },
+  },
+
+  potImage: {
+    position: "absolute",
+    bottom: 0,
+    zIndex: 2,
+  },
+
+  flowerImage: {
+    position: "absolute",
+    width: 60,
+    height: 140,
+    zIndex: 3,
   },
 
   modalBackdrop: {
@@ -242,6 +235,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(252,246,236,0.96)",
     borderRadius: 28,
     padding: 28,
+
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
   },
 
   genreTitle: {
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     color: "#556b55",
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 30,
   },
 
   meaning: {
