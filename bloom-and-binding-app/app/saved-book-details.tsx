@@ -17,6 +17,7 @@ import {
 import Slider from "@react-native-community/slider";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   getSavedBooks,
   SavedBook,
@@ -38,6 +39,8 @@ type FormatOption = {
   label: string;
   icon: keyof typeof Feather.glyphMap;
 };
+
+const UNCLAIMED_BLOOMS_KEY = "bloom-and-binding-unclaimed-blooms";
 
 export default function SavedBookDetailsScreen() {
     const formatDisplayDate = (dateString?: string) => {
@@ -82,13 +85,14 @@ const [noteDeleteIndex, setNoteDeleteIndex] = useState<number | null>(null);
 
   const [formatModalVisible, setFormatModalVisible] = useState(false);
   const [statusModalVisible, setStatusModalVisible] = useState(false);
-
+  const [flowerModalVisible, setFlowerModalVisible] = useState(false);
+  const [selectedFlower, setSelectedFlower] = useState<string | null>(null);
   const formats: FormatOption[] = [
     { label: "Hardcover", icon: "book" },
     { label: "Paperback", icon: "book-open" },
-    { label: "Kindle", icon: "tablet" },
+    { label: "Kindle/e-Book", icon: "tablet" },
     { label: "Audiobook", icon: "headphones" },
-    { label: "Other", icon: "star" },
+    { label: "Borrowed", icon: "star" },
   ];
 
   const statuses: StatusOption[] = [
@@ -97,6 +101,32 @@ const [noteDeleteIndex, setNoteDeleteIndex] = useState<number | null>(null);
     { label: "DNF", value: "DNF", icon: "x-circle" },
     { label: "Finished", value: "Finished", icon: "check-circle" },
     ];
+
+    const flowerOptions = [
+  "hydrangea",
+  "peony",
+  "rose",
+  "tulip",
+  "lavender",
+  "sunflower",
+  "daisy",
+  "wildflowers",
+  "ranunculus",
+  "cosmos",
+];
+
+const flowerPreviewAssets: Record<string, any> = {
+  hydrangea: require("../assets/conservatory/hydrangea.png"),
+  peony: require("../assets/conservatory/peony.png"),
+  rose: require("../assets/conservatory/rose.png"),
+  tulip: require("../assets/conservatory/tulip.png"),
+  lavender: require("../assets/conservatory/lavender.png"),
+  sunflower: require("../assets/conservatory/sunflower.png"),
+  daisy: require("../assets/conservatory/daisy.png"),
+  wildflowers: require("../assets/conservatory/wildflowers.png"),
+  ranunculus: require("../assets/conservatory/ranunculus.png"),
+  cosmos: require("../assets/conservatory/cosmos.png"),
+};
 
   {(status === "Currently Reading" || status === "Finished") && (
   <View style={styles.dateSection}>
@@ -227,6 +257,28 @@ const confirmDeleteNote = () => {
   setNoteDeleteIndex(null);
 };
 
+const addUnclaimedBloom = async (finishedBook: SavedBook) => {
+  const existing = await AsyncStorage.getItem(UNCLAIMED_BLOOMS_KEY);
+  const blooms = existing ? JSON.parse(existing) : [];
+
+  const alreadyExists = blooms.some(
+    (bloom: any) => bloom.bookId === finishedBook.id
+  );
+
+  if (alreadyExists) return;
+
+  blooms.push({
+    bookId: finishedBook.id,
+    title: finishedBook.title,
+    author: finishedBook.author,
+    finishedAt: finishedBook.finishedAt,
+  });
+
+  await AsyncStorage.setItem(
+    UNCLAIMED_BLOOMS_KEY,
+    JSON.stringify(blooms)
+  );
+};
 
   const handleSaveChanges = async () => {
     if (!book) return;
@@ -248,10 +300,19 @@ progressValue: status === "Currently Reading" ? progressValue : undefined,
     };
 
     await updateSavedBook(updatedBook);
-    setBook(updatedBook);
-    Keyboard.dismiss();
+setBook(updatedBook);
+Keyboard.dismiss();
 
-    setSaveSuccessVisible(true);
+const wasAlreadyFinished = book.status === "Finished";
+const isNowFinished = status === "Finished";
+
+if (isNowFinished && !wasAlreadyFinished) {
+  await addUnclaimedBloom(updatedBook);
+  setFlowerModalVisible(true);
+  return;
+}
+
+setSaveSuccessVisible(true);
   };
 
   const handleDeleteBook = () => {
@@ -374,6 +435,100 @@ const confirmDeleteBook = async () => {
       </View>
     </Modal>
   );
+
+  const renderFlowerModal = () => (
+  <Modal
+    visible={flowerModalVisible}
+    transparent
+    animationType="fade"
+    onRequestClose={() => setFlowerModalVisible(false)}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalCard}>
+        <Text style={styles.modalTitle}>Choose Your Bloom!</Text>
+
+        <ScrollView
+  style={styles.flowerScroll}
+  contentContainerStyle={styles.flowerScrollContent}
+  showsVerticalScrollIndicator={false}
+>
+  <View style={styles.flowerGrid}>
+    {flowerOptions.map((flower) => {
+      const selected = selectedFlower === flower;
+
+      return (
+        <TouchableOpacity
+          key={flower}
+          style={[
+            styles.flowerOption,
+            selected && styles.modalOptionSelected,
+          ]}
+          onPress={() => setSelectedFlower(flower)}
+        >
+          <Image
+            source={flowerPreviewAssets[flower]}
+            style={styles.flowerPreview}
+            resizeMode="contain"
+          />
+
+          <Text
+            style={[
+              styles.flowerLabel,
+              selected && styles.modalOptionTextSelected,
+            ]}
+          >
+            {flower}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+</ScrollView>
+
+        <TouchableOpacity
+  disabled={!selectedFlower}
+  style={[
+    styles.modalDoneButton,
+    !selectedFlower && styles.modalDoneButtonDisabled,
+  ]}
+ onPress={async () => {
+  if (!selectedFlower || !book) return;
+
+  const existing = await AsyncStorage.getItem(UNCLAIMED_BLOOMS_KEY);
+  const blooms = existing ? JSON.parse(existing) : [];
+
+  const updatedBlooms = blooms.filter(
+    (bloom: any) => bloom.bookId !== book.id
+  );
+
+  await AsyncStorage.setItem(
+    UNCLAIMED_BLOOMS_KEY,
+    JSON.stringify(updatedBlooms)
+  );
+
+  setFlowerModalVisible(false);
+
+  router.push({
+  pathname: "/conservatory",
+  params: {
+    placingFlower: "true",
+    selectedFlower,
+    bookId: book.id,
+    bookTitle: book.title,
+    author: book.author,
+    finishedAt: book.finishedAt,
+    coverUrl: book.coverUrl,
+  },
+});
+}}
+        >
+          <Text style={styles.modalDoneText}>Claim Bloom</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+);
+
 const renderSaveSuccessModal = () => (
   <Modal
     visible={saveSuccessVisible}
@@ -501,6 +656,7 @@ const renderDeleteNoteModal = () => (
 
       {renderFormatModal()}
       {renderStatusModal()}
+      {renderFlowerModal()}
 
 {renderSaveSuccessModal()}
 {renderDeleteBookModal()}
@@ -1344,5 +1500,48 @@ dateModalDoneText: {
   color: "#1f3324",
   fontSize: 20,
   fontFamily: "CormorantGaramond_600SemiBold",
+},
+
+flowerGrid: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  justifyContent: "space-between",
+  gap: 14,
+  marginBottom: 24,
+},
+
+flowerOption: {
+  width: "47%",
+  paddingVertical: 14,
+  paddingHorizontal: 8,
+  borderRadius: 16,
+  alignItems: "center",
+  backgroundColor: "#F8F4EA",
+},
+
+flowerLabel: {
+  fontSize: 13,
+  color: "#234028",
+  textAlign: "center",
+  textTransform: "capitalize",
+},
+
+flowerPreview: {
+  width: 82,
+  height: 82,
+  marginBottom: 6,
+},
+
+modalDoneButtonDisabled: {
+  opacity: 0.45,
+},
+
+flowerScroll: {
+  maxHeight: 360,
+  marginBottom: 20,
+},
+
+flowerScrollContent: {
+  paddingBottom: 8,
 },
 });
