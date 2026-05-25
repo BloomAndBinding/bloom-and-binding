@@ -78,7 +78,7 @@ const [noteDeleteIndex, setNoteDeleteIndex] = useState<number | null>(null);
     "percentage"
   );
   const [progressValue, setProgressValue] = useState("0");
-
+  const [rating, setRating] = useState(0);
   const [notes, setNotes] = useState<string[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [editingNoteIndex, setEditingNoteIndex] = useState<number | null>(null);
@@ -189,6 +189,7 @@ const flowerPreviewAssets: Record<string, any> = {
         setFinishedAt(foundBook.finishedAt || "");
         setProgressType(foundBook.progressType || "percentage");
         setProgressValue(foundBook.progressValue || "0");
+        setRating(foundBook.rating || 0);
         setNotes(legacyNotes);
       }
 
@@ -283,6 +284,11 @@ const addUnclaimedBloom = async (finishedBook: SavedBook) => {
   const handleSaveChanges = async () => {
     if (!book) return;
 
+    if (status === "Finished" && !finishedAt) {
+  alert("Please add a finished date before marking this book as finished.");
+  return;
+}
+
     const updatedBook: SavedBook = {
       id: book.id,
       title: book.title,
@@ -294,9 +300,10 @@ const addUnclaimedBloom = async (finishedBook: SavedBook) => {
       status: status || undefined,
 addedAt: book.addedAt ?? new Date().toISOString(),
 startedAt: startedAt || undefined,
-finishedAt: status === "Finished" ? finishedAt || new Date().toISOString() : undefined,
+finishedAt: status === "Finished" ? finishedAt : undefined,
 progressType: status === "Currently Reading" ? progressType : undefined,
 progressValue: status === "Currently Reading" ? progressValue : undefined,
+rating: status === "Finished" ? rating : undefined,
     };
 
     await updateSavedBook(updatedBook);
@@ -485,47 +492,59 @@ const confirmDeleteBook = async () => {
   </View>
 </ScrollView>
 
-        <TouchableOpacity
-  disabled={!selectedFlower}
-  style={[
-    styles.modalDoneButton,
-    !selectedFlower && styles.modalDoneButtonDisabled,
-  ]}
- onPress={async () => {
-  if (!selectedFlower || !book) return;
+<View style={styles.flowerActionRow}>
+  <TouchableOpacity
+    style={styles.flowerCancelButton}
+    onPress={() => {
+      setFlowerModalVisible(false);
+      setSelectedFlower(null);
+    }}
+  >
+    <Text style={styles.flowerCancelText}>Cancel</Text>
+  </TouchableOpacity>
 
-  const existing = await AsyncStorage.getItem(UNCLAIMED_BLOOMS_KEY);
-  const blooms = existing ? JSON.parse(existing) : [];
+  <TouchableOpacity
+    disabled={!selectedFlower}
+    style={[
+      styles.flowerClaimButton,
+      !selectedFlower && styles.modalDoneButtonDisabled,
+    ]}
+    onPress={async () => {
+      if (!selectedFlower || !book) return;
 
-  const updatedBlooms = blooms.filter(
-    (bloom: any) => bloom.bookId !== book.id
-  );
+      const existing = await AsyncStorage.getItem(UNCLAIMED_BLOOMS_KEY);
+      const blooms = existing ? JSON.parse(existing) : [];
 
-  await AsyncStorage.setItem(
-    UNCLAIMED_BLOOMS_KEY,
-    JSON.stringify(updatedBlooms)
-  );
+      const updatedBlooms = blooms.filter(
+        (bloom: any) => bloom.bookId !== book.id
+      );
 
-  setFlowerModalVisible(false);
+      await AsyncStorage.setItem(
+        UNCLAIMED_BLOOMS_KEY,
+        JSON.stringify(updatedBlooms)
+      );
 
-  router.push({
-  pathname: "/conservatory",
-  params: {
-    placingFlower: "true",
-    selectedFlower,
-    bookId: book.id,
-    bookTitle: book.title,
-    author: book.author,
-    finishedAt: book.finishedAt,
-    coverUrl: book.coverUrl,
-  },
-});
-}}
-        >
-          <Text style={styles.modalDoneText}>Claim Bloom</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      setFlowerModalVisible(false);
+
+      router.push({
+        pathname: "/conservatory",
+        params: {
+          placingFlower: "true",
+          selectedFlower,
+          bookId: book.id,
+          bookTitle: book.title,
+          author: book.author,
+          finishedAt: book.finishedAt,
+          coverUrl: book.coverUrl,
+        },
+      });
+    }}
+  >
+    <Text style={styles.flowerClaimText}>Claim Bloom</Text>
+  </TouchableOpacity>
+</View>
+</View>
+</View>
   </Modal>
 );
 
@@ -710,6 +729,23 @@ const renderDeleteNoteModal = () => (
 
                 <Feather name="chevron-right" size={20} color="#234028" />
               </TouchableOpacity>
+
+              <View style={styles.ratingSection}>
+  <Text style={styles.selectorLabel}>Rating</Text>
+
+  <View style={styles.ratingRow}>
+    {[1, 2, 3, 4, 5].map((star) => (
+      <TouchableOpacity
+        key={star}
+        onPress={() => setRating(rating === star ? 0 : star)}
+      >
+        <Text style={[styles.star, star <= rating && styles.starFilled]}>
+          ★
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+</View>
             </View>
           </View>
 
@@ -744,6 +780,7 @@ const renderDeleteNoteModal = () => (
     )}
   </View>
 )}
+
           {status === "Currently Reading" && (
             <View style={styles.progressSection}>
               {progressType === "percentage" ? (
@@ -987,7 +1024,7 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-    marginBottom: 14,
+    marginBottom: 10,
     alignSelf: "flex-start",
   },
 
@@ -1005,8 +1042,8 @@ const styles = StyleSheet.create({
   },
 
   cover: {
-    width: 164,
-    height: 246,
+    width: 170,
+    height: 260,
     borderRadius: 18,
   },
 
@@ -1023,7 +1060,7 @@ const styles = StyleSheet.create({
   },
 
   selectorCard: {
-    minHeight: 102,
+    minHeight: 90,
     backgroundColor: "rgba(255, 248, 238, 0.55)",
     borderRadius: 16,
     padding: 14,
@@ -1053,7 +1090,7 @@ const styles = StyleSheet.create({
   },
 
   progressSection: {
-    marginTop: 20,
+    marginTop: 10,
     backgroundColor: "rgba(255, 248, 238, 0.55)",
     borderRadius: 16,
     padding: 10,
@@ -1127,8 +1164,8 @@ notesHeader: {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "center",
-  marginTop: 14,
-  marginBottom: 14,
+  marginTop: 8,
+  marginBottom: 8,
 },
 
   notesDecor: {
@@ -1543,5 +1580,64 @@ flowerScroll: {
 
 flowerScrollContent: {
   paddingBottom: 8,
+},
+
+ratingSection: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginTop: 6,
+},
+
+ratingRow: {
+  flexDirection: "row",
+  alignItems: "center",
+},
+
+star: {
+  fontSize: 18,
+  color: "#CFC7B6",
+  marginHorizontal: 4,
+},
+
+starFilled: {
+  color: "#A67C52",
+},
+
+flowerActionRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  gap: 12,
+  marginTop: 4,
+},
+
+flowerCancelButton: {
+  flex: 1,
+  borderRadius: 14,
+  paddingVertical: 11,
+  alignItems: "center",
+  backgroundColor: "#E7E0CF",
+},
+
+flowerCancelText: {
+  color: "#234028",
+  fontSize: 17,
+  fontWeight: "500",
+  fontFamily: "CormorantGaramond_500Medium",
+},
+
+flowerClaimButton: {
+  flex: 1,
+  backgroundColor: "#234028",
+  borderRadius: 14,
+  paddingVertical: 11,
+  alignItems: "center",
+},
+
+flowerClaimText: {
+  color: "#FDF8EC",
+  fontSize: 17,
+  fontWeight: "500",
+  fontFamily: "CormorantGaramond_500Medium",
 },
 });

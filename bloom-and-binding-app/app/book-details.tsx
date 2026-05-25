@@ -18,6 +18,7 @@ import {
 import Slider from "@react-native-community/slider";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { saveBook } from "../services/libraryStorage";
 
 type StatusOption = {
@@ -30,6 +31,8 @@ type FormatOption = {
   label: string;
   icon: keyof typeof Feather.glyphMap;
 };
+
+const UNCLAIMED_BLOOMS_KEY = "bloom-and-binding-unclaimed-blooms";
 
 export default function BookDetailsScreen() {
     const formatDisplayDate = (dateString?: string) => {
@@ -61,20 +64,29 @@ const toIsoDate = (date: Date) => date.toISOString();
     "percentage"
   );
   const [progressValue, setProgressValue] = useState("0");
-
+  const [rating, setRating] = useState(0);
   const [notes, setNotes] = useState<string[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [editingNoteIndex, setEditingNoteIndex] = useState<number | null>(null);
 
   const [formatModalVisible, setFormatModalVisible] = useState(false);
   const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [flowerModalVisible, setFlowerModalVisible] = useState(false);
+const [selectedFlower, setSelectedFlower] = useState<string | null>(null);
+const [pendingFinishedBook, setPendingFinishedBook] = useState<{
+  id: string;
+  title: string;
+  author: string;
+  coverUrl?: string;
+  finishedAt?: string;
+} | null>(null);
 
   const formats: FormatOption[] = [
     { label: "Hardcover", icon: "book" },
     { label: "Paperback", icon: "book-open" },
-    { label: "Kindle", icon: "tablet" },
+    { label: "Kindle/e-Book", icon: "tablet" },
     { label: "Audiobook", icon: "headphones" },
-    { label: "Other", icon: "star" },
+    { label: "Borrowed", icon: "star" },
   ];
 
   const statuses: StatusOption[] = [
@@ -83,6 +95,32 @@ const toIsoDate = (date: Date) => date.toISOString();
     { label: "DNF", value: "DNF", icon: "x-circle" },
     { label: "Finished", value: "Finished", icon: "check-circle" },
   ];
+
+  const flowerOptions = [
+  "hydrangea",
+  "peony",
+  "rose",
+  "tulip",
+  "lavender",
+  "sunflower",
+  "daisy",
+  "wildflowers",
+  "ranunculus",
+  "cosmos",
+];
+
+const flowerPreviewAssets: Record<string, any> = {
+  hydrangea: require("../assets/conservatory/hydrangea.png"),
+  peony: require("../assets/conservatory/peony.png"),
+  rose: require("../assets/conservatory/rose.png"),
+  tulip: require("../assets/conservatory/tulip.png"),
+  lavender: require("../assets/conservatory/lavender.png"),
+  sunflower: require("../assets/conservatory/sunflower.png"),
+  daisy: require("../assets/conservatory/daisy.png"),
+  wildflowers: require("../assets/conservatory/wildflowers.png"),
+  ranunculus: require("../assets/conservatory/ranunculus.png"),
+  cosmos: require("../assets/conservatory/cosmos.png"),
+};
 
   const getStatusLabel = () => {
     const foundStatus = statuses.find((item) => item.value === status);
@@ -144,25 +182,65 @@ const toIsoDate = (date: Date) => date.toISOString();
       return;
     }
 
-    await saveBook({
-      id: `${String(title)}-${Date.now()}`,
-      title: String(title),
-      author: String(author),
-      coverUrl: coverUrl ? String(coverUrl) : undefined,
-      formats: selectedFormats,
-      notes,
-      quickNotes: undefined,
-      status: status || undefined,
-startedAt: startedAt || undefined,
-finishedAt:
-  status === "Finished"
-    ? finishedAt || new Date().toISOString()
-    : undefined,
-progressType: status === "Currently Reading" ? progressType : undefined,
-progressValue: status === "Currently Reading" ? progressValue : undefined,
-    });
+    if (status === "Finished" && !finishedAt) {
+  Alert.alert(
+    "Finished date required",
+    "Please add a finished date before marking this book as finished."
+  );
+  return;
+}
 
-    router.push("/(tabs)/library");
+    const newBookId = `${String(title)}-${Date.now()}`;
+
+const newBook = {
+  id: newBookId,
+  title: String(title),
+  author: String(author),
+  coverUrl: coverUrl ? String(coverUrl) : undefined,
+  formats: selectedFormats,
+  notes,
+  quickNotes: undefined,
+  status: status || undefined,
+  startedAt: startedAt || undefined,
+  finishedAt: status === "Finished" ? finishedAt : undefined,
+  progressType: status === "Currently Reading" ? progressType : undefined,
+  progressValue: status === "Currently Reading" ? progressValue : undefined,
+  rating,
+};
+
+await saveBook(newBook);
+
+if (status === "Finished") {
+  const existing = await AsyncStorage.getItem(UNCLAIMED_BLOOMS_KEY);
+  const blooms = existing ? JSON.parse(existing) : [];
+
+  blooms.push({
+    bookId: newBook.id,
+    title: newBook.title,
+    author: newBook.author,
+    finishedAt: newBook.finishedAt,
+    coverUrl: newBook.coverUrl,
+  });
+
+  await AsyncStorage.setItem(
+    UNCLAIMED_BLOOMS_KEY,
+    JSON.stringify(blooms)
+  );
+
+  setPendingFinishedBook({
+    id: newBook.id,
+    title: newBook.title,
+    author: newBook.author,
+    coverUrl: newBook.coverUrl,
+    finishedAt: newBook.finishedAt,
+  });
+
+  setSelectedFlower(null);
+  setFlowerModalVisible(true);
+  return;
+}
+
+router.push("/(tabs)/library");
   };
 
   const renderFormatModal = () => (
@@ -277,6 +355,113 @@ progressValue: status === "Currently Reading" ? progressValue : undefined,
     </Modal>
   );
 
+  const renderFlowerModal = () => (
+  <Modal
+    visible={flowerModalVisible}
+    transparent
+    animationType="fade"
+    onRequestClose={() => setFlowerModalVisible(false)}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalCard}>
+        <Text style={styles.modalTitle}>Choose Your Bloom</Text>
+
+        <ScrollView
+          style={styles.flowerScroll}
+          contentContainerStyle={styles.flowerScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.flowerGrid}>
+            {flowerOptions.map((flower) => {
+              const selected = selectedFlower === flower;
+
+              return (
+                <TouchableOpacity
+                  key={flower}
+                  style={[
+                    styles.flowerOption,
+                    selected && styles.modalOptionSelected,
+                  ]}
+                  onPress={() => setSelectedFlower(flower)}
+                >
+                  <Image
+                    source={flowerPreviewAssets[flower]}
+                    style={styles.flowerPreview}
+                    resizeMode="contain"
+                  />
+
+                  <Text
+                    style={[
+                      styles.flowerLabel,
+                      selected && styles.modalOptionTextSelected,
+                    ]}
+                  >
+                    {flower}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        <View style={styles.modalActionRow}>
+  <TouchableOpacity
+    style={styles.modalCancelButton}
+    onPress={() => {
+      setFlowerModalVisible(false);
+      setSelectedFlower(null);
+      router.push("/(tabs)/library");
+    }}
+  >
+    <Text style={styles.modalCancelText}>Cancel</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity
+    disabled={!selectedFlower || !pendingFinishedBook}
+    style={[
+      styles.flowerClaimButton,
+      (!selectedFlower || !pendingFinishedBook) &&
+        styles.modalDoneButtonDisabled,
+    ]}
+    onPress={async () => {
+  if (!selectedFlower || !pendingFinishedBook) return;
+
+  const existing = await AsyncStorage.getItem(UNCLAIMED_BLOOMS_KEY);
+  const blooms = existing ? JSON.parse(existing) : [];
+
+  const updatedBlooms = blooms.filter(
+    (bloom: any) => bloom.bookId !== pendingFinishedBook.id
+  );
+
+  await AsyncStorage.setItem(
+    UNCLAIMED_BLOOMS_KEY,
+    JSON.stringify(updatedBlooms)
+  );
+
+  setFlowerModalVisible(false);
+
+  router.push({
+    pathname: "/conservatory",
+    params: {
+      placingFlower: "true",
+      selectedFlower,
+      bookId: pendingFinishedBook.id,
+      bookTitle: pendingFinishedBook.title,
+      author: pendingFinishedBook.author,
+      finishedAt: pendingFinishedBook.finishedAt,
+      coverUrl: pendingFinishedBook.coverUrl,
+    },
+  });
+}}
+  >
+    <Text style={styles.flowerClaimText}>Claim Bloom</Text>
+  </TouchableOpacity>
+</View>
+      </View>
+    </View>
+  </Modal>
+);
+
   return (
     <View style={styles.background}>
       <Image
@@ -286,6 +471,7 @@ progressValue: status === "Currently Reading" ? progressValue : undefined,
 
       {renderFormatModal()}
       {renderStatusModal()}
+      {renderFlowerModal()}
 
       <KeyboardAvoidingView
         style={styles.screen}
@@ -338,6 +524,22 @@ progressValue: status === "Currently Reading" ? progressValue : undefined,
 
                 <Feather name="chevron-right" size={20} color="#234028" />
               </TouchableOpacity>
+              <View style={styles.ratingSection}>
+  <Text style={styles.selectorLabel}>Rating</Text>
+
+  <View style={styles.ratingRow}>
+    {[1, 2, 3, 4, 5].map((star) => (
+      <TouchableOpacity
+        key={star}
+        onPress={() => setRating(rating === star ? 0 : star)}
+      >
+        <Text style={[styles.star, star <= rating && styles.starFilled]}>
+          ★
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+</View>
             </View>
           </View>
 
@@ -630,8 +832,8 @@ const styles = StyleSheet.create({
   },
 
   cover: {
-    width: 164,
-    height: 246,
+    width: 170,
+    height: 260,
     borderRadius: 18,
   },
 
@@ -648,8 +850,8 @@ const styles = StyleSheet.create({
   },
 
   selectorCard: {
-    minHeight: 102,
-    backgroundColor: "rgba(255, 248, 238, 0.58)",
+    minHeight: 90,
+    backgroundColor: "rgba(255, 248, 238, 0.55)",
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
@@ -1017,5 +1219,126 @@ dateModalDoneText: {
   color: "#1f3324",
   fontSize: 20,
   fontFamily: "CormorantGaramond_600SemiBold",
+},
+
+ratingSection: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginTop: 6,
+},
+
+ratingRow: {
+  flexDirection: "row",
+  alignItems: "center",
+},
+
+star: {
+  fontSize: 18,
+  color: "#CFC7B6",
+  marginHorizontal: 3,
+},
+
+starFilled: {
+  color: "#A67C52",
+},
+
+flowerScroll: {
+  maxHeight: 320,
+  marginBottom: 20,
+},
+
+flowerScrollContent: {
+  paddingBottom: 8,
+},
+
+flowerGrid: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  justifyContent: "space-between",
+  gap: 14,
+},
+
+flowerOption: {
+  width: "47%",
+  paddingVertical: 16,
+  paddingHorizontal: 10,
+  borderRadius: 18,
+  alignItems: "center",
+  backgroundColor: "#F8F4EA",
+},
+
+flowerPreview: {
+  width: 82,
+  height: 82,
+  marginBottom: 6,
+},
+
+flowerLabel: {
+  fontSize: 13,
+  color: "#234028",
+  textAlign: "center",
+  textTransform: "capitalize",
+},
+
+modalActionRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  gap: 12,
+},
+
+modalCancelButton: {
+  flex: 1,
+  borderRadius: 999,
+  paddingVertical: 14,
+  alignItems: "center",
+  backgroundColor: "#E7E0CF",
+},
+
+modalCancelText: {
+  color: "#234028",
+  fontSize: 15,
+  fontWeight: "700",
+},
+
+modalDoneButtonDisabled: {
+  opacity: 0.45,
+},
+
+flowerActionRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  gap: 12,
+  marginTop: 4,
+},
+
+flowerCancelButton: {
+  flex: 1,
+  borderRadius: 14,
+  paddingVertical: 11,
+  alignItems: "center",
+  backgroundColor: "#E7E0CF",
+},
+
+flowerCancelText: {
+  color: "#234028",
+  fontSize: 17,
+  fontWeight: "500",
+  fontFamily: "CormorantGaramond_500Medium",
+},
+
+flowerClaimButton: {
+  flex: 1,
+  backgroundColor: "#234028",
+  borderRadius: 14,
+  paddingVertical: 11,
+  alignItems: "center",
+},
+
+flowerClaimText: {
+  color: "#FDF8EC",
+  fontSize: 17,
+  fontWeight: "500",
+  fontFamily: "CormorantGaramond_500Medium",
 },
 });

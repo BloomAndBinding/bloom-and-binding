@@ -8,6 +8,7 @@ export type SavedBook = {
   author: string;
   coverUrl?: string;
   formats: string[];
+  rating?: number;
   quickNotes?: string;
   notes?: string[];
     status?: string;

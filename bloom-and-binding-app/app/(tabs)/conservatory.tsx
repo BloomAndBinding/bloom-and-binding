@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Image,
   ImageBackground,
@@ -155,6 +155,7 @@ type PlacedFlower = {
   shelfIndex: number;
   slotIndex: number;
   flower: string;
+  year?: number;
   bookId?: string;
   bookTitle?: string;
   author?: string;
@@ -167,10 +168,12 @@ type UnclaimedBloom = {
   title: string;
   author?: string;
   finishedAt?: string;
+  coverUrl?: string;
 };
 
 type PendingPlacement = {
   flower: string;
+  year: number;
   bookId?: string;
   bookTitle?: string;
   author?: string;
@@ -180,14 +183,14 @@ type PendingPlacement = {
 
 export default function ConservatoryScreen() {
   const {
-  placingFlower,
-  selectedFlower,
-  bookId,
-  bookTitle,
-  author,
-  finishedAt,
-  coverUrl,
-} = useLocalSearchParams();
+    placingFlower,
+    selectedFlower,
+    bookId,
+    bookTitle,
+    author,
+    finishedAt,
+    coverUrl,
+  } = useLocalSearchParams();
 
   const selectedFlowerName = Array.isArray(selectedFlower)
     ? selectedFlower[0]
@@ -202,6 +205,10 @@ export default function ConservatoryScreen() {
   const selectedCoverUrl = Array.isArray(coverUrl)
     ? coverUrl[0]
     : coverUrl;
+
+  const currentYear = new Date().getFullYear();
+
+  const [selectedYear, setSelectedYear] = useState(currentYear);
   const [placedFlowers, setPlacedFlowers] = useState<PlacedFlower[]>([]);
   const [unclaimedBlooms, setUnclaimedBlooms] = useState<UnclaimedBloom[]>([]);
   const [flowerModalVisible, setFlowerModalVisible] = useState(false);
@@ -212,6 +219,18 @@ export default function ConservatoryScreen() {
     useState<PendingPlacement | null>(null);
   const [selectedPlacedFlower, setSelectedPlacedFlower] =
     useState<PlacedFlower | null>(null);
+    const [changingPlacedFlower, setChangingPlacedFlower] =
+  useState<PlacedFlower | null>(null);
+
+  const getYearFromDate = (dateString?: string) => {
+    if (!dateString) return currentYear;
+
+    const date = new Date(dateString);
+
+    if (Number.isNaN(date.getTime())) return currentYear;
+
+    return date.getFullYear();
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -220,7 +239,14 @@ export default function ConservatoryScreen() {
       );
 
       if (savedPlacements) {
-        setPlacedFlowers(JSON.parse(savedPlacements));
+        const parsed = JSON.parse(savedPlacements);
+
+        const upgraded = parsed.map((flower: PlacedFlower) => ({
+          ...flower,
+          year: flower.year ?? getYearFromDate(flower.finishedAt),
+        }));
+
+        setPlacedFlowers(upgraded);
       }
 
       const savedBlooms = await AsyncStorage.getItem(UNCLAIMED_BLOOMS_KEY);
@@ -235,8 +261,13 @@ export default function ConservatoryScreen() {
 
   useEffect(() => {
     if (placingFlower === "true" && selectedFlowerName) {
-      setPendingPlacement({
+  const placementYear = getYearFromDate(selectedFinishedAt);
+
+  setSelectedYear(placementYear);
+
+  setPendingPlacement({
         flower: selectedFlowerName,
+        year: placementYear,
         bookId: selectedBookId ?? undefined,
         bookTitle: selectedBookTitle ?? undefined,
         author: selectedAuthor ?? undefined,
@@ -251,6 +282,7 @@ export default function ConservatoryScreen() {
     selectedBookTitle,
     selectedAuthor,
     selectedFinishedAt,
+    selectedCoverUrl,
   ]);
 
   const savePlacements = async (nextPlacements: PlacedFlower[]) => {
@@ -278,20 +310,37 @@ export default function ConservatoryScreen() {
     await saveUnclaimedBlooms(updated);
   };
 
-  const currentUnclaimedBloom = unclaimedBlooms.find(
-    (bloom) =>
-      !placedFlowers.some((flower) => flower.bookId === bloom.bookId)
+  const visiblePlacedFlowers = useMemo(
+    () =>
+      placedFlowers.filter(
+        (flower) => (flower.year ?? currentYear) === selectedYear
+      ),
+    [placedFlowers, selectedYear]
+  );
+
+  const currentUnclaimedBloom = useMemo(
+    () =>
+      unclaimedBlooms.find((bloom) => {
+        const bloomYear = getYearFromDate(bloom.finishedAt);
+
+        return (
+          bloomYear === selectedYear &&
+          !placedFlowers.some((flower) => flower.bookId === bloom.bookId)
+        );
+      }),
+    [unclaimedBlooms, placedFlowers, selectedYear]
   );
 
   const isPlacingFlower =
     !!pendingPlacement &&
+    pendingPlacement.year === selectedYear &&
     !placedFlowers.some(
       (flower) =>
         !!pendingPlacement.bookId && flower.bookId === pendingPlacement.bookId
     );
 
   const isSlotOccupied = (shelfIndex: number, slotIndex: number) =>
-    placedFlowers.some(
+    visiblePlacedFlowers.some(
       (item) => item.shelfIndex === shelfIndex && item.slotIndex === slotIndex
     );
 
@@ -314,15 +363,15 @@ export default function ConservatoryScreen() {
       year: "numeric",
     });
   };
-
-  const movePlacedFlower = async () => {
+const movePlacedFlower = async () => {
   if (!selectedPlacedFlower) return;
 
   const nextPlacements = placedFlowers.filter(
     (flower) =>
       !(
         flower.shelfIndex === selectedPlacedFlower.shelfIndex &&
-        flower.slotIndex === selectedPlacedFlower.slotIndex
+        flower.slotIndex === selectedPlacedFlower.slotIndex &&
+        flower.year === selectedPlacedFlower.year
       )
   );
 
@@ -330,6 +379,7 @@ export default function ConservatoryScreen() {
 
   setPendingPlacement({
     flower: selectedPlacedFlower.flower,
+    year: selectedPlacedFlower.year ?? currentYear,
     bookId: selectedPlacedFlower.bookId,
     bookTitle: selectedPlacedFlower.bookTitle,
     author: selectedPlacedFlower.author,
@@ -340,6 +390,15 @@ export default function ConservatoryScreen() {
   setSelectedPlacedFlower(null);
 };
 
+const changePlacedFlower = async () => {
+  if (!selectedPlacedFlower) return;
+
+  setChangingPlacedFlower(selectedPlacedFlower);
+  setPickerSelectedFlower(selectedPlacedFlower.flower);
+  setSelectedPlacedFlower(null);
+  setFlowerModalVisible(true);
+};
+
 const deletePlacedFlowerReward = async () => {
   if (!selectedPlacedFlower) return;
 
@@ -347,7 +406,8 @@ const deletePlacedFlowerReward = async () => {
     (flower) =>
       !(
         flower.shelfIndex === selectedPlacedFlower.shelfIndex &&
-        flower.slotIndex === selectedPlacedFlower.slotIndex
+        flower.slotIndex === selectedPlacedFlower.slotIndex &&
+        flower.year === selectedPlacedFlower.year
       )
   );
 
@@ -364,181 +424,196 @@ const deletePlacedFlowerReward = async () => {
   setSelectedPlacedFlower(null);
 };
 
-  const changePlacedFlower = async () => {
-  if (!selectedPlacedFlower) return;
+const renderFlowerPickerModal = () => (
+  <Modal
+    visible={flowerModalVisible}
+    transparent
+    animationType="fade"
+    onRequestClose={() => setFlowerModalVisible(false)}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalCard}>
+        <Text style={styles.modalTitle}>Choose Your Bloom</Text>
 
-  const nextPlacements = placedFlowers.filter(
-    (flower) =>
-      !(
-        flower.shelfIndex === selectedPlacedFlower.shelfIndex &&
-        flower.slotIndex === selectedPlacedFlower.slotIndex
-      )
-  );
+        <ScrollView
+          style={styles.flowerScroll}
+          contentContainerStyle={styles.flowerScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.flowerGrid}>
+            {flowerOptions.map((flower) => {
+              const selected = pickerSelectedFlower === flower;
 
-  await savePlacements(nextPlacements);
+              return (
+                <TouchableOpacity
+                  key={flower}
+                  style={[
+                    styles.flowerOption,
+                    selected && styles.modalOptionSelected,
+                  ]}
+                  onPress={() => setPickerSelectedFlower(flower)}
+                >
+                  <Image
+                    source={flowerPreviewAssets[flower]}
+                    style={styles.flowerPreview}
+                    resizeMode="contain"
+                  />
 
-  setPendingPlacement({
-    flower: selectedPlacedFlower.flower,
-    bookId: selectedPlacedFlower.bookId,
-    bookTitle: selectedPlacedFlower.bookTitle,
-    author: selectedPlacedFlower.author,
-    finishedAt: selectedPlacedFlower.finishedAt,
+                  <Text
+                    style={[
+                      styles.flowerLabel,
+                      selected && styles.modalOptionTextSelected,
+                    ]}
+                  >
+                    {flower}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        <View style={styles.flowerActionRow}>
+  <TouchableOpacity
+    style={styles.flowerCancelButton}
+    onPress={() => {
+      setFlowerModalVisible(false);
+      setPickerSelectedFlower(null);
+      setChangingPlacedFlower(null);
+    }}
+  >
+    <Text style={styles.flowerCancelText}>Cancel</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity
+    disabled={
+  !pickerSelectedFlower ||
+  (!currentUnclaimedBloom && !pendingPlacement && !changingPlacedFlower)
+}
+    style={[
+      styles.flowerClaimButton,
+      (
+  !pickerSelectedFlower ||
+  (!currentUnclaimedBloom && !pendingPlacement && !changingPlacedFlower)
+) && styles.modalDoneButtonDisabled
+    ]}
+    onPress={() => {
+      if (changingPlacedFlower && pickerSelectedFlower) {
+  const nextPlacements = placedFlowers.map((flower) => {
+    const isTargetFlower =
+      flower.shelfIndex === changingPlacedFlower.shelfIndex &&
+      flower.slotIndex === changingPlacedFlower.slotIndex &&
+      flower.year === changingPlacedFlower.year;
+
+    if (!isTargetFlower) return flower;
+
+    return {
+      ...flower,
+      flower: pickerSelectedFlower,
+    };
   });
 
-  setPickerSelectedFlower(selectedPlacedFlower.flower);
-  setSelectedPlacedFlower(null);
-  setFlowerModalVisible(true);
-};
+  savePlacements(nextPlacements);
 
-  const renderFlowerPickerModal = () => (
-    <Modal
-      visible={flowerModalVisible}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setFlowerModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Choose Your Bloom</Text>
+  setFlowerModalVisible(false);
+  setPickerSelectedFlower(null);
+  setChangingPlacedFlower(null);
+  return;
+}
+      if (!pickerSelectedFlower || (!currentUnclaimedBloom && !pendingPlacement)) return;
 
-          <ScrollView
-            style={styles.flowerScroll}
-            contentContainerStyle={styles.flowerScrollContent}
-            showsVerticalScrollIndicator={false}
+      setPendingPlacement({
+  flower: pickerSelectedFlower,
+  year:
+    pendingPlacement?.year ??
+    getYearFromDate(currentUnclaimedBloom?.finishedAt),
+  bookId: pendingPlacement?.bookId ?? currentUnclaimedBloom?.bookId,
+  bookTitle: pendingPlacement?.bookTitle ?? currentUnclaimedBloom?.title,
+  author: pendingPlacement?.author ?? currentUnclaimedBloom?.author,
+  finishedAt: pendingPlacement?.finishedAt ?? currentUnclaimedBloom?.finishedAt,
+  coverUrl: pendingPlacement?.coverUrl ?? currentUnclaimedBloom?.coverUrl,
+});
+
+      setFlowerModalVisible(false);
+      setPickerSelectedFlower(null);
+    }}
+  >
+    <Text style={styles.flowerClaimText}>Claim Bloom</Text>
+  </TouchableOpacity>
+</View>
+</View>
+    </View>
+  </Modal>
+);
+
+const renderFlowerInfoModal = () => (
+  <Modal
+    visible={!!selectedPlacedFlower}
+    transparent
+    animationType="fade"
+    onRequestClose={() => setSelectedPlacedFlower(null)}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.infoCard}>
+        <Text style={styles.infoKicker}>Bloomed From</Text>
+
+        {selectedPlacedFlower?.coverUrl && (
+          <Image
+            source={{ uri: selectedPlacedFlower.coverUrl }}
+            style={styles.infoCover}
+            resizeMode="cover"
+          />
+        )}
+
+        <Text style={styles.infoTitle}>
+          {selectedPlacedFlower?.bookTitle ?? "Untitled Book"}
+        </Text>
+
+        {!!selectedPlacedFlower?.author && (
+          <Text style={styles.infoAuthor}>{selectedPlacedFlower.author}</Text>
+        )}
+
+        <Text style={styles.infoDate}>
+          Finished {formatDate(selectedPlacedFlower?.finishedAt)}
+        </Text>
+
+        <Text style={styles.infoFlower}>
+          Bloom: {selectedPlacedFlower?.flower}
+        </Text>
+
+        <View style={styles.infoButtonGrid}>
+          <TouchableOpacity
+            style={styles.infoActionButton}
+            onPress={movePlacedFlower}
           >
-            <View style={styles.flowerGrid}>
-              {flowerOptions.map((flower) => {
-                const selected = pickerSelectedFlower === flower;
-
-                return (
-                  <TouchableOpacity
-                    key={flower}
-                    style={[
-                      styles.flowerOption,
-                      selected && styles.modalOptionSelected,
-                    ]}
-                    onPress={() => setPickerSelectedFlower(flower)}
-                  >
-                    <Image
-                      source={flowerPreviewAssets[flower]}
-                      style={styles.flowerPreview}
-                      resizeMode="contain"
-                    />
-                    
-                    <Text
-                      style={[
-                        styles.flowerLabel,
-                        selected && styles.modalOptionTextSelected,
-                      ]}
-                    >
-                      {flower}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
+            <Text style={styles.infoActionText}>Move Bloom</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.modalBackButton}
-            onPress={() => {
-            setFlowerModalVisible(false);
-            setPickerSelectedFlower(null);
-            }}
->
-  <Text style={styles.modalBackText}>Back</Text>
-</TouchableOpacity>
+            style={styles.infoActionButton}
+            onPress={changePlacedFlower}
+          >
+            <Text style={styles.infoActionText}>Change Bloom</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
-            disabled={!pickerSelectedFlower || !currentUnclaimedBloom}
-            style={[
-              styles.modalDoneButton,
-              (!pickerSelectedFlower || !currentUnclaimedBloom) &&
-                styles.modalDoneButtonDisabled,
-            ]}
-            onPress={() => {
-              if (!pickerSelectedFlower || !currentUnclaimedBloom) return;
-
-              setPendingPlacement({
-                flower: pickerSelectedFlower,
-                bookId: currentUnclaimedBloom.bookId,
-                bookTitle: currentUnclaimedBloom.title,
-                author: currentUnclaimedBloom.author,
-                finishedAt: currentUnclaimedBloom.finishedAt,
-              });
-
-              setFlowerModalVisible(false);
-              setPickerSelectedFlower(null);
-            }}
+            style={[styles.infoActionButton, styles.deleteActionButton]}
+            onPress={deletePlacedFlowerReward}
           >
-            <Text style={styles.modalDoneText}>Claim Bloom</Text>
+            <Text style={styles.infoActionText}>Delete Bloom</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.infoActionButton}
+            onPress={() => setSelectedPlacedFlower(null)}
+          >
+            <Text style={styles.infoActionText}>Close</Text>
           </TouchableOpacity>
         </View>
       </View>
-    </Modal>
-  );
-
-  const renderFlowerInfoModal = () => (
-    <Modal
-      visible={!!selectedPlacedFlower}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setSelectedPlacedFlower(null)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.infoCard}>
-          <Text style={styles.infoKicker}>Bloomed From</Text>
-{selectedPlacedFlower?.coverUrl && (
-  <Image
-    source={{ uri: selectedPlacedFlower.coverUrl }}
-    style={styles.infoCover}
-    resizeMode="cover"
-  />
-)}
-          <Text style={styles.infoTitle}>
-            {selectedPlacedFlower?.bookTitle ?? "Untitled Book"}
-          </Text>
-
-          {!!selectedPlacedFlower?.author && (
-            <Text style={styles.infoAuthor}>{selectedPlacedFlower.author}</Text>
-          )}
-
-          <Text style={styles.infoDate}>
-            Finished {formatDate(selectedPlacedFlower?.finishedAt)}
-          </Text>
-
-          <Text style={styles.infoFlower}>
-            Bloom: {selectedPlacedFlower?.flower}
-          </Text>
-
-<View style={styles.infoButtonGrid}>
-  <TouchableOpacity style={styles.infoActionButton} onPress={movePlacedFlower}>
-    <Text style={styles.infoActionText}>Move Bloom</Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity style={styles.infoActionButton} onPress={changePlacedFlower}>
-    <Text style={styles.infoActionText}>Change Bloom</Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity
-    style={[styles.infoActionButton, styles.deleteActionButton]}
-    onPress={deletePlacedFlowerReward}
-  >
-    <Text style={styles.infoActionText}>Delete Bloom</Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity
-    style={styles.infoActionButton}
-    onPress={() => setSelectedPlacedFlower(null)}
-  >
-    <Text style={styles.infoActionText}>Close</Text>
-  </TouchableOpacity>
-  </View>
-</View>
-      </View>
-    </Modal>
-  );
-
+    </View>
+  </Modal>
+);
   return (
     <View style={styles.container}>
       <ImageBackground
@@ -548,6 +623,32 @@ const deletePlacedFlowerReward = async () => {
       >
         {renderFlowerPickerModal()}
         {renderFlowerInfoModal()}
+
+        <View style={styles.yearSelector}>
+          <TouchableOpacity
+  style={styles.yearArrowButton}
+  disabled={isPlacingFlower}
+  onPress={() => {
+    if (isPlacingFlower) return;
+    setSelectedYear((year) => year - 1);
+  }}
+>
+  <Text style={styles.yearArrowText}>‹</Text>
+</TouchableOpacity>
+
+          <Text style={styles.yearText}>{selectedYear}</Text>
+
+          <TouchableOpacity
+  style={styles.yearArrowButton}
+  disabled={isPlacingFlower}
+  onPress={() => {
+    if (isPlacingFlower) return;
+    setSelectedYear((year) => year + 1);
+  }}
+>
+  <Text style={styles.yearArrowText}>›</Text>
+</TouchableOpacity>
+        </View>
 
         {currentUnclaimedBloom && !isPlacingFlower && (
           <TouchableOpacity
@@ -568,7 +669,7 @@ const deletePlacedFlowerReward = async () => {
 
         {shelves.map((shelf, shelfIndex) => {
           return slotLefts.map((left, slotIndex) => {
-            const placedFlower = placedFlowers.find(
+            const placedFlower = visiblePlacedFlowers.find(
               (item) =>
                 item.shelfIndex === shelfIndex && item.slotIndex === slotIndex
             );
@@ -593,7 +694,7 @@ const deletePlacedFlowerReward = async () => {
 
             return (
               <Pressable
-                key={`${shelf.id}-${slotIndex}`}
+                key={`${selectedYear}-${shelf.id}-${slotIndex}`}
                 style={[
                   styles.slot,
                   {
@@ -618,6 +719,7 @@ const deletePlacedFlowerReward = async () => {
                         shelfIndex,
                         slotIndex,
                         flower: pendingPlacement.flower,
+                        year: pendingPlacement.year,
                         bookId: pendingPlacement.bookId,
                         bookTitle: pendingPlacement.bookTitle,
                         author: pendingPlacement.author,
@@ -691,6 +793,46 @@ const styles = StyleSheet.create({
     flex: 0,
     width: "100%",
     height: "100%",
+  },
+
+  yearSelector: {
+    position: "absolute",
+    top: 48,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(253, 248, 236, 0.92)",
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    zIndex: 25,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+
+  yearArrowButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+  },
+
+  yearArrowText: {
+    fontSize: 26,
+    lineHeight: 28,
+    fontFamily: "CormorantGaramond_500Medium",
+    color: "#234028",
+  },
+
+  yearText: {
+    minWidth: 54,
+    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "500",
+    fontFamily: "CormorantGaramond_500Medium",
+    color: "#234028",
   },
 
   slot: {
@@ -837,6 +979,20 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  modalBackButton: {
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: "#E7E0CF",
+    marginBottom: 10,
+  },
+
+  modalBackText: {
+    color: "#234028",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
   modalDoneButton: {
     backgroundColor: "#234028",
     borderRadius: 999,
@@ -855,7 +1011,7 @@ const styles = StyleSheet.create({
   },
 
   infoCard: {
-    width: "90%",
+    width: "100%",
     borderRadius: 28,
     backgroundColor: "#FDF8EC",
     padding: 24,
@@ -868,6 +1024,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textTransform: "uppercase",
     letterSpacing: 1,
+  },
+
+  infoCover: {
+    width: 96,
+    height: 142,
+    borderRadius: 10,
+    marginBottom: 12,
   },
 
   infoTitle: {
@@ -897,112 +1060,69 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#234028",
     textTransform: "capitalize",
-    marginBottom: 22,
+    marginBottom: 18,
   },
 
-  moveBloomButton: {
-  width: "100%",
-  borderRadius: 999,
-  paddingVertical: 14,
-  alignItems: "center",
-  backgroundColor: "#657A5B",
-  marginBottom: 10,
-},
-
-moveBloomText: {
-  color: "#FDF8EC",
-  fontSize: 15,
-  fontWeight: "700",
-},
-
-  closeInfoButton: {
+  infoButtonGrid: {
     width: "100%",
-    borderRadius: 999,
-    paddingVertical: 14,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 4,
+  },
+
+  infoActionButton: {
+    width: "48%",
+    paddingVertical: 10,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#234028",
   },
 
-  closeInfoText: {
-    color: "#FDF8EC",
-    fontSize: 15,
-    fontWeight: "700",
+  deleteActionButton: {
+    backgroundColor: "#234028",
   },
 
-  modalBackButton: {
-  borderRadius: 999,
-  paddingVertical: 14,
-  alignItems: "center",
-  backgroundColor: "#E7E0CF",
-  marginBottom: 10,
-},
+  infoActionText: {
+    color: "#FDF8EC",
+    fontSize: 17,
+    fontWeight: "500",
+    fontFamily: "CormorantGaramond_500Medium",
+  },
 
-modalBackText: {
-  color: "#234028",
-  fontSize: 15,
-  fontWeight: "700",
-},
-
-deleteBloomButton: {
-  width: "100%",
-  borderRadius: 999,
-  paddingVertical: 14,
-  alignItems: "center",
-  backgroundColor: "#B23A2A",
-  marginBottom: 10,
-},
-
-deleteBloomText: {
-  color: "#FDF8EC",
-  fontSize: 15,
-  fontWeight: "700",
-},
-
-changeBloomButton: {
-  width: "100%",
-  borderRadius: 999,
-  paddingVertical: 14,
-  alignItems: "center",
-  backgroundColor: "#A67C52",
-  marginBottom: 10,
-},
-
-changeBloomText: {
-  color: "#FDF8EC",
-  fontSize: 15,
-  fontWeight: "700",
-},
-
-infoCover: {
-  width: 96,
-  height: 142,
-  borderRadius: 10,
-  marginBottom: 12,
-},
-
-infoButtonGrid: {
-  width: "100%",
+  flowerActionRow: {
   flexDirection: "row",
-  flexWrap: "wrap",
   justifyContent: "space-between",
-  gap: 10,
+  gap: 12,
   marginTop: 4,
 },
 
-infoActionButton: {
-  width: "48%",
-  paddingVertical: 10,
+flowerCancelButton: {
+  flex: 1,
   borderRadius: 14,
+  paddingVertical: 11,
   alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "#234028",
+  backgroundColor: "#E7E0CF",
 },
 
-deleteActionButton: {
-  backgroundColor: "#234028",
+flowerCancelText: {
+  color: "#234028",
+  fontSize: 17,
+  fontWeight: "500",
+  fontFamily: "CormorantGaramond_500Medium",
 },
 
-infoActionText: {
+flowerClaimButton: {
+  flex: 1,
+  backgroundColor: "#234028",
+  borderRadius: 14,
+  paddingVertical: 11,
+  alignItems: "center",
+},
+
+flowerClaimText: {
   color: "#FDF8EC",
   fontSize: 17,
   fontWeight: "500",

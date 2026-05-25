@@ -90,7 +90,7 @@ const goalProgress = Math.min(booksFinishedThisYear / yearlyGoal, 1);
             <Text style={styles.greeting}>{getGreeting()},</Text>
             <Text style={styles.name}>Brittany!</Text>
             <Text style={styles.subGreeting}>
-              Welcome back to your reading sanctuary!
+              Welcome back to your reading sanctuary
             </Text>
           </View>
         </ImageBackground>
@@ -163,7 +163,7 @@ const goalProgress = Math.min(booksFinishedThisYear / yearlyGoal, 1);
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>No current read</Text>
               <Text style={styles.emptyText}>
-                Pick your next adventure from the library 📚
+                Pick your next adventure from the library!
               </Text>
             </View>
           )}
