@@ -6,7 +6,7 @@ export default function Home() {
   const [entered, setEntered] = useState(false);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#f5efe5] relative">
+    <main className="fixed inset-0 w-screen h-screen overflow-hidden bg-[#f5efe5]">
       {/* SCREEN 1 */}
       <div
         className={`absolute inset-0 z-20 transition-all duration-1000 ${
@@ -18,15 +18,15 @@ export default function Home() {
         <img
           src="/welcome-bg.png"
           alt="Bloom & Binding Welcome"
-          className="w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover"
         />
 
         <div className="absolute inset-0 bg-black/10" />
 
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30">
+        <div className="absolute inset-x-0 bottom-44 sm:bottom-8 flex justify-center px-6 z-30">
           <button
             onClick={() => setEntered(true)}
-            className="px-8 py-4 rounded-full bg-[#eadfcf]/95 border border-[#d8c8ae] backdrop-blur-md text-[#3a2f27] text-lg font-serif shadow-xl hover:scale-105 hover:bg-[#e4d6c2] transition"
+            className="px-8 py-4 rounded-full bg-[#eadfcf]/95 border border-[#d8c8ae] backdrop-blur-md text-[#3a2f27] text-lg font-serif shadow-xl active:scale-95 transition"
           >
             Step Inside
           </button>
@@ -41,20 +41,21 @@ export default function Home() {
             : "opacity-0 scale-95 pointer-events-none"
         }`}
       >
+        {/* blurred bg */}
         <div className="absolute inset-0">
           <img
             src="/welcome-bg.png"
-            alt="Bloom & Binding Background"
-            className="w-full h-full object-cover"
+            alt="Background"
+            className="absolute inset-0 w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-[#f5efe5]/45 backdrop-blur-md" />
         </div>
 
-        <div className="relative z-10 min-h-screen flex items-center justify-center px-6">
-          <div className="w-full max-w-md rounded-[36px] bg-[#efe4d1]/92 backdrop-blur-md shadow-2xl border border-[#dccdb8] px-10 pt-4 pb-8">
+        {/* login */}
+        <div className="relative z-10 flex items-center justify-center w-full h-full px-4">
+          <div className="w-full max-w-md rounded-[32px] bg-[#efe4d1]/92 backdrop-blur-md shadow-2xl border border-[#dccdb8] px-8 pt-4 pb-8">
 
-            {/* Welcome Header */}
-            <div className="flex justify-center -mb-8">
+            <div className="flex justify-center -mb-6">
               <img
                 src="/welcome-header.png"
                 alt="Welcome"
@@ -62,14 +63,13 @@ export default function Home() {
               />
             </div>
 
-            {/* Buttons */}
             <div className="space-y-4">
-              <button className="w-full rounded-2xl bg-black text-white py-5 text-lg font-medium shadow-lg hover:opacity-90 transition flex items-center justify-center gap-3">
+              <button className="w-full rounded-2xl bg-black text-white py-4 text-lg font-medium shadow-lg active:scale-[0.98] transition flex items-center justify-center gap-3">
                 <span className="text-2xl"></span>
                 Continue with Apple
               </button>
 
-              <button className="w-full rounded-2xl bg-white border border-[#ddd2c3] py-5 text-lg font-medium text-[#2d241d] hover:bg-[#faf7f1] transition flex items-center justify-center gap-3 shadow-sm">
+              <button className="w-full rounded-2xl bg-white border border-[#ddd2c3] py-4 text-lg font-medium text-[#2d241d] active:scale-[0.98] transition flex items-center justify-center gap-3 shadow-sm">
                 <img
                   src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
                   alt="Google"
@@ -78,7 +78,7 @@ export default function Home() {
                 Continue with Google
               </button>
 
-              <button className="w-full rounded-2xl bg-[#b9bea7] py-5 text-lg font-medium text-[#2d241d] shadow-sm hover:opacity-90 transition flex items-center justify-center gap-3">
+              <button className="w-full rounded-2xl bg-[#b9bea7] py-4 text-lg font-medium text-[#2d241d] shadow-sm active:scale-[0.98] transition flex items-center justify-center gap-3">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -94,7 +94,7 @@ export default function Home() {
               </button>
             </div>
 
-            <p className="text-center text-[#6d6258] mt-8 text-lg">
+            <p className="text-center text-[#6d6258] mt-6 text-base">
               Already have an account?{" "}
               <span className="underline cursor-pointer hover:text-[#2d241d]">
                 Sign In

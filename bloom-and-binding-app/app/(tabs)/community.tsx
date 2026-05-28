@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -13,10 +13,13 @@ import {
   KeyboardAvoidingView,
 Platform,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import {
+  searchGoogleBooks,
+  GoogleBookResult,
+} from "../../services/googleBooks";
 
 // Bloom & Binding Community Page v1 — functional local test version
 // Replace local state with Firestore/Supabase once the flow feels right.
@@ -56,6 +59,121 @@ function getClubTheme(themeId?: string) {
   return CLUB_THEMES.find((theme) => theme.id === themeId) || CLUB_THEMES[0];
 }
 const starterDiscoverClubs: any[] = [];
+const starterFriendUpdates = [
+  {
+    id: "update-1",
+    text: "started reading Fourth Wing",
+    timeAgo: "12m ago",
+    hearts: 3,
+    hearted: false,
+
+    reader: {
+      id: "reader-amanda",
+      displayName: "Amanda",
+      username: "@cozyreader",
+      avatar: require("../../assets/avatars/cozy-chapter-keeper.png"),
+      booksRead: 18,
+      goal: 40,
+      currentBook: "Fourth Wing",
+      currentAuthor: "Rebecca Yarros",
+      coverUrl:
+        "https://books.google.com/books/content?id=5pPNEAAAQBAJ&printsec=frontcover&img=1&zoom=1",
+      recentUpdates: [
+  {
+    text: "started reading Fourth Wing",
+    hearts: 2,
+    hearted: false,
+  },
+  {
+    text: "joined Tea Nook Book Club",
+    hearts: 1,
+    hearted: true,
+  },
+  {
+    text: "finished Iron Flame",
+    hearts: 4,
+    hearted: false,
+  },
+],
+    },
+  },
+
+  {
+    id: "update-2",
+    text: "is reading Onyx Storm",
+    timeAgo: "34m ago",
+    hearts: 5,
+    hearted: true,
+
+    reader: {
+      id: "reader-brittany",
+      displayName: "Brittany",
+      username: "@dragonqueen",
+      avatar: require("../../assets/avatars/dragon-rider.png"),
+      booksRead: 27,
+      goal: 50,
+      currentBook: "Onyx Storm",
+      currentAuthor: "Rebecca Yarros",
+      coverUrl:
+        "https://books.google.com/books/content?id=5pPNEAAAQBAJ&printsec=frontcover&img=1&zoom=1",
+      recentUpdates: [
+  {
+    text: "started reading Fourth Wing",
+    hearts: 2,
+    hearted: false,
+  },
+  {
+    text: "joined Tea Nook Book Club",
+    hearts: 1,
+    hearted: true,
+  },
+  {
+    text: "finished Iron Flame",
+    hearts: 4,
+    hearted: false,
+  },
+],
+    },
+  },
+
+  {
+    id: "update-3",
+    text: "finished The Women",
+    timeAgo: "1h ago",
+    hearts: 2,
+    hearted: false,
+
+    reader: {
+      id: "reader-sarah",
+      displayName: "Sarah",
+      username: "@midnightpages",
+      avatar: require("../../assets/avatars/moonlit-oracle.png"),
+      booksRead: 11,
+      goal: 24,
+      currentBook: "The Women",
+      currentAuthor: "Kristin Hannah",
+      coverUrl:
+        "https://books.google.com/books/content?id=5pPNEAAAQBAJ&printsec=frontcover&img=1&zoom=1",
+      recentUpdates: [
+  {
+    text: "started reading Fourth Wing",
+    hearts: 2,
+    hearted: false,
+  },
+  {
+    text: "joined Tea Nook Book Club",
+    hearts: 1,
+    hearted: true,
+  },
+  {
+    text: "finished Iron Flame",
+    hearts: 4,
+    hearted: false,
+  },
+],
+    },
+  },
+];
 const CLUBS_STORAGE_KEY = "bloom_binding_your_clubs";
 const REQUESTS_STORAGE_KEY = "bloom_binding_club_requests";
 const COMMENTS_STORAGE_KEY = "bloom_binding_club_comments";
@@ -66,37 +184,66 @@ export default function CommunityScreen() {
   const [clubDescription, setClubDescription] = useState("");
   const [currentBook, setCurrentBook] = useState("");
   const [currentAuthor, setCurrentAuthor] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
+  const [bookSearch, setBookSearch] = useState("");
+const [bookResults, setBookResults] = useState<any[]>([]);
+const [bookSearching, setBookSearching] = useState(false);
   const [searchText, setSearchText] = useState("");
+const [friendUpdates, setFriendUpdates] = useState(starterFriendUpdates);
+const [selectedReader, setSelectedReader] = useState<any | null>(null);
+const [readerProfileVisible, setReaderProfileVisible] = useState(false);
   const [editingClubId, setEditingClubId] = useState<string | null>(null);
   const [selectedThemeId, setSelectedThemeId] = useState("dragon-library");
   const [approvedClubIds, setApprovedClubIds] = useState<string[]>([]);
   const [pendingRequests, setPendingRequests] = useState<
   Record<string, { id: string; displayName: string; username: string }[]>
 >({});
-  const hasClubs = yourClubs.length > 0;
-  const discoverClubs = yourClubs;
-  useEffect(() => {
-  loadClubs();
-}, []);
+  const visibleClubs = yourClubs.filter(
+  (club) => club?.id && club?.name?.trim() && !club.deleted
+);
+
+const hasClubs = visibleClubs.length > 0;
+const discoverClubs = visibleClubs.filter((club) => {
+  const search = searchText.trim().toLowerCase();
+
+  if (!search) return true;
+
+  return (
+    club.name?.toLowerCase().includes(search) ||
+    club.description?.toLowerCase().includes(search) ||
+    club.currentBook?.toLowerCase().includes(search) ||
+    club.author?.toLowerCase().includes(search)
+  );
+});
 
 async function loadClubs() {
   try {
     const saved = await AsyncStorage.getItem(CLUBS_STORAGE_KEY);
     if (saved) {
-      setYourClubs(JSON.parse(saved));
-      const savedRequests = await AsyncStorage.getItem(REQUESTS_STORAGE_KEY);
-if (savedRequests) {
-  setPendingRequests(JSON.parse(savedRequests));
-}
+      const parsedClubs = JSON.parse(saved);
+      setYourClubs(
+        parsedClubs.filter(
+          (club: any) => club?.id && club?.name?.trim() && !club.deleted
+        )
+      );
+    }
+
+    const savedRequests = await AsyncStorage.getItem(REQUESTS_STORAGE_KEY);
+    if (savedRequests) {
+      setPendingRequests(JSON.parse(savedRequests));
     }
   } catch (error) {
-    console.log("Could not load clubs", error);
+    console.log("Error loading clubs", error);
   }
 }
 
 async function saveClubs(nextClubs: any[]) {
-  setYourClubs(nextClubs);
-  await AsyncStorage.setItem(CLUBS_STORAGE_KEY, JSON.stringify(nextClubs));
+  const cleanClubs = nextClubs.filter(
+    (club) => club?.id && club?.name?.trim() && !club.deleted
+  );
+
+  setYourClubs(cleanClubs);
+  await AsyncStorage.setItem(CLUBS_STORAGE_KEY, JSON.stringify(cleanClubs));
 }
 async function savePendingRequests(nextRequests: any) {
   setPendingRequests(nextRequests);
@@ -105,12 +252,31 @@ async function savePendingRequests(nextRequests: any) {
     JSON.stringify(nextRequests)
   );
 }
+
+function toggleHeartUpdate(updateId: string) {
+  setFriendUpdates((prev) =>
+    prev.map((update) =>
+      update.id === updateId
+        ? {
+            ...update,
+            hearted: !update.hearted,
+            hearts: update.hearted ? update.hearts - 1 : update.hearts + 1,
+          }
+        : update
+    )
+  );
+}
+
 function resetClubForm() {
   setEditingClubId(null);
   setClubName("");
   setClubDescription("");
   setCurrentBook("");
   setCurrentAuthor("");
+  setCoverUrl("");
+  setBookSearch("");
+  setBookResults([]);
+  setBookSearching(false);
   setSelectedThemeId("dragon-library");
 }
 
@@ -127,8 +293,16 @@ function startEditClub(club: any) {
     club.currentBook === "No current read yet" ? "" : club.currentBook || ""
   );
   setCurrentAuthor(club.author || "");
+  setBookSearch(
+  club.currentBook && club.currentBook !== "No current read yet"
+    ? club.author
+      ? `${club.currentBook} — ${club.author}`
+      : club.currentBook
+    : ""
+);
   setSelectedThemeId(club.themeId || "dragon-library");
   setCreateVisible(true);
+  setCoverUrl(club.coverUrl || "");
 }
 
 async function deleteClub(clubId: string) {
@@ -141,12 +315,20 @@ async function deleteClub(clubId: string) {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          const nextClubs = yourClubs.filter((club) => club.id !== clubId);
-          await saveClubs(nextClubs);
+          const saved = await AsyncStorage.getItem(CLUBS_STORAGE_KEY);
+          const storedClubs = saved ? JSON.parse(saved) : yourClubs;
 
-          const savedComments = await AsyncStorage.getItem(
-            COMMENTS_STORAGE_KEY
+          const nextClubs = storedClubs.filter(
+            (club: any) => club.id !== clubId
           );
+
+          setYourClubs(nextClubs);
+          await AsyncStorage.setItem(
+            CLUBS_STORAGE_KEY,
+            JSON.stringify(nextClubs)
+          );
+
+          const savedComments = await AsyncStorage.getItem(COMMENTS_STORAGE_KEY);
           const allComments = savedComments ? JSON.parse(savedComments) : {};
 
           delete allComments[clubId];
@@ -160,6 +342,7 @@ async function deleteClub(clubId: string) {
     ]
   );
 }
+
 async function requestToJoinClub(clubId: string) {
   const existingRequests = pendingRequests[clubId] || [];
 
@@ -203,6 +386,54 @@ async function approveRequest(clubId: string) {
 
   await saveClubs(nextClubs);
 }
+async function searchBooks(query: string) {
+  const trimmedQuery = query.trim();
+  setBookSearch(query);
+
+  if (trimmedQuery.length < 3) {
+    setBookResults([]);
+    return;
+  }
+
+  try {
+    setBookSearching(true);
+
+   const books = await searchGoogleBooks(trimmedQuery);
+console.log("Community books:", books.length);
+console.log("First result:", books[0]);
+
+    const results = books.map((book: GoogleBookResult) => ({
+      key: book.id,
+      title: book.title,
+      author: book.authors?.join(", ") || "",
+      year: "",
+      coverUrl: book.coverUrl || "",
+    }));
+
+    setBookResults(results);
+  } catch (error) {
+    console.log("Community book search error:", error);
+    setBookResults([]);
+    Alert.alert("Book search error", "Something went wrong while searching books.");
+  } finally {
+    setBookSearching(false);
+  }
+}
+
+function selectBook(book: any) {
+  setCurrentBook(book.title || "");
+  setCurrentAuthor(book.author || "");
+  setCoverUrl(book.coverUrl || "");
+  setBookSearch(book.author ? `${book.title} — ${book.author}` : book.title);
+  setBookResults([]);
+}
+function updateBookSearchText(text: string) {
+  setBookSearch(text);
+  setBookResults([]);
+  setCurrentBook("");
+  setCurrentAuthor("");
+  setCoverUrl("");
+}
 async function saveClubForm() {
   const trimmedName = clubName.trim();
 
@@ -223,14 +454,17 @@ async function saveClubForm() {
             currentBook: currentBook.trim() || "No current read yet",
             author: currentAuthor.trim() || "",
 themeId: selectedThemeId,
+coverUrl: coverUrl || "",
           }
         : club
     );
 
     await saveClubs(nextClubs);
   } else {
-    const newClub = {
-      id: `club-${Date.now()}`,
+    const newClubId = `club-${Date.now()}`;
+
+const newClub = {
+  id: newClubId,
       name: trimmedName,
       description:
         clubDescription.trim() || "A cozy reading nook for bookish friends.",
@@ -243,12 +477,20 @@ themeId: selectedThemeId,
 roomTheme: selectedThemeId,
       approvalRequired: true,
       owner: true,
+      coverUrl: coverUrl || "",
     };
 
     await saveClubs([newClub, ...yourClubs]);
+
+resetClubForm();
+setCoverUrl("");
+setCreateVisible(false);
+router.push(`/club/${newClubId}`);
+return;
   }
 
   resetClubForm();
+  setCoverUrl("");
   setCreateVisible(false);
 }
 
@@ -264,11 +506,12 @@ roomTheme: selectedThemeId,
   <Image source={HEADER_IMAGE} style={styles.headerPlaque} />
 
 </View>
-          <SectionHeader title="Your Clubs" actionText={hasClubs ? "See all" : undefined} />
+          <SectionHeader title="Your Clubs" />
 
           {hasClubs ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-              {yourClubs.map((club) => (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} 
+            contentContainerStyle={styles.horizontalList}>
+              {visibleClubs.map((club) => (
                 <YourClubCard
   key={club.id}
   club={club}
@@ -300,25 +543,17 @@ roomTheme: selectedThemeId,
             <Ionicons name="chevron-forward" size={20} color="#8d715d" />
           </TouchableOpacity>
 
-          <SectionHeader title="Discover Clubs" actionText="Filter" />
+          <SectionHeader title="Discover Clubs" />
 
 <View style={styles.searchCard}>
             <Ionicons name="search" size={20} color="#8a725f" />
             <TextInput
               value={searchText}
               onChangeText={setSearchText}
-              placeholder="Search clubs, genres, books, dragons…"
+              placeholder="Search clubs, books, or authors…"
               placeholderTextColor="#6F655D"
               style={styles.searchInput}
             />
-          </View>
-
-          <View style={styles.filterRow}>
-            {["Romantasy", "Romance", "Moms", "Fantasy", "Thriller", "Mystery", "Cozy"].map((filter) => (
-              <TouchableOpacity key={filter} style={styles.filterPill}>
-                <Text style={styles.filterText}>{filter}</Text>
-              </TouchableOpacity>
-            ))}
           </View>
 
           {discoverClubs.length > 0 ? (
@@ -346,6 +581,56 @@ roomTheme: selectedThemeId,
     </Text>
   </View>
 )}
+<View style={styles.friendUpdatesSection}>
+  <SectionHeader title="Friends Reading Updates" />
+
+  <View style={styles.friendUpdatesList}>
+  {friendUpdates.map((update) => (
+    <TouchableOpacity
+  key={update.id}
+  style={styles.friendUpdateCard}
+  activeOpacity={0.88}
+  onPress={() => {
+    setSelectedReader(update.reader);
+    setReaderProfileVisible(true);
+  }}
+>
+      <View style={styles.friendAvatar}>
+        <Text style={styles.friendAvatarText}>
+          {update.reader.displayName.charAt(0)}
+        </Text>
+      </View>
+
+      <View style={styles.friendUpdateBody}>
+        <Text style={styles.friendUpdateText}>
+          <Text style={styles.friendUpdateName}>{update.reader.displayName}</Text>{" "}
+          {update.text}
+        </Text>
+
+        <Text style={styles.friendUpdateTime}>
+          {update.timeAgo}
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        style={styles.heartButton}
+        onPress={() => toggleHeartUpdate(update.id)}
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name={update.hearted ? "heart" : "heart-outline"}
+          size={20}
+          color="#7a5137"
+        />
+
+        <Text style={styles.heartCount}>
+          {update.hearts}
+        </Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  ))}
+</View>
+</View>
       </ScrollView>
 
         <CreateClubModal
@@ -367,9 +652,127 @@ roomTheme: selectedThemeId,
           selectedThemeId={selectedThemeId}
           setSelectedThemeId={setSelectedThemeId}
           clubThemes={CLUB_THEMES}
+          bookSearch={bookSearch}
+          searchBooks={searchBooks}
+          bookResults={bookResults}
+          bookSearching={bookSearching}
+          selectBook={selectBook}
+          updateBookSearchText={updateBookSearchText}
         />
+
+        <ReaderProfileModal
+  visible={readerProfileVisible}
+  reader={selectedReader}
+  onClose={() => setReaderProfileVisible(false)}
+/>
+
       </View>
     </ImageBackground>
+  );
+}
+
+function ReaderProfileModal({ visible, reader, onClose }: any) {
+  if (!reader) return null;
+const [updates, setUpdates] = useState(reader.recentUpdates || []);
+  const progressPercent = Math.min(
+    (reader.booksRead / reader.goal) * 100,
+    100
+  );
+
+function toggleReaderHeart(index: number) {
+  setUpdates((prev: any[]) =>
+    prev.map((item, i) =>
+      i === index
+        ? {
+            ...item,
+            hearted: !item.hearted,
+            hearts: item.hearted ? item.hearts - 1 : item.hearts + 1,
+          }
+        : item
+    )
+  );
+}
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.readerModalBackdrop}>
+        <View style={styles.readerModalCard}>
+          <View style={styles.readerModalHeader}>
+            <Image source={reader.avatar} style={styles.readerAvatarLarge} />
+
+            <View style={styles.readerInfo}>
+              <Text style={styles.readerName}>{reader.displayName}</Text>
+              <Text style={styles.readerUsername}>{reader.username}</Text>
+
+              <Text style={styles.readerGoalText}>
+                {reader.booksRead}/{reader.goal} books this year
+              </Text>
+
+              <View style={styles.readerGoalBarBg}>
+                <View
+                  style={[
+                    styles.readerGoalBarFill,
+                    { width: `${progressPercent}%` },
+                  ]}
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.readerCloseButton} onPress={onClose}>
+              <Ionicons name="close" size={20} color="#514841" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.readerCurrentBookCard}>
+            <Image
+              source={{ uri: reader.coverUrl }}
+              style={styles.readerBookCover}
+            />
+
+            <View style={styles.readerCurrentBookInfo}>
+              <Text style={styles.readerCurrentLabel}>Current Read</Text>
+              <Text style={styles.readerCurrentTitle}>
+                {reader.currentBook}
+              </Text>
+              <Text style={styles.readerCurrentAuthor}>
+                {reader.currentAuthor}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.readerUpdatesTitle}>Recent Updates</Text>
+
+          <ScrollView
+            style={styles.readerUpdatesScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            {updates.map((item: any, index: number) => (
+  <View key={`${item.text}-${index}`} style={styles.readerUpdateRow}>
+    <Text style={styles.readerUpdateText}>
+      {item.text}
+    </Text>
+
+    <TouchableOpacity
+      style={styles.readerUpdateHeartButton}
+      onPress={() => toggleReaderHeart(index)}
+      activeOpacity={0.8}
+    >
+      <Ionicons
+        name={item.hearted ? "heart" : "heart-outline"}
+        size={16}
+        color="#7a5137"
+      />
+
+      <Text style={styles.readerUpdateHeartCount}>
+        {item.hearts}
+      </Text>
+    </TouchableOpacity>
+  </View>
+))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -413,6 +816,7 @@ function YourClubCard({
     source={getClubTheme(club.themeId).image}
     style={styles.roomArtImage}
   />
+  <View style={styles.themeImageOverlay} />
 
   {club.unreadCount > 0 && (
     <View style={styles.unreadBadge}>
@@ -463,6 +867,7 @@ function DiscoverClubCard({
     source={getClubTheme(club.themeId).image}
     style={styles.discoverThemeImage}
   />
+  <View style={styles.themeImageOverlay} />
 </View>
       <View style={styles.discoverBody}>
         <Text style={styles.discoverName} numberOfLines={1}>{club.name}</Text>
@@ -507,6 +912,12 @@ function CreateClubModal({
   selectedThemeId,
   setSelectedThemeId,
   clubThemes,
+  bookSearch,
+  searchBooks,
+  bookResults,
+  bookSearching,
+  selectBook,
+  updateBookSearchText,
 }: any) {
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -515,6 +926,11 @@ function CreateClubModal({
   behavior={Platform.OS === "ios" ? "padding" : "height"}
 >
   <View style={styles.modalCard}>
+  <ScrollView
+    showsVerticalScrollIndicator={false}
+    keyboardShouldPersistTaps="handled"
+    contentContainerStyle={styles.modalScrollContent}
+  >
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>
@@ -548,6 +964,7 @@ function CreateClubModal({
     </TouchableOpacity>
   ))}
 </ScrollView>
+
           <Text style={styles.inputLabel}>Club name</Text>
           <TextInput
             value={clubName}
@@ -565,25 +982,53 @@ function CreateClubModal({
             placeholderTextColor="#a89584"
             style={[styles.modalInput, styles.textArea]}
             multiline
-          />
+          /><Text style={styles.inputLabel}>Current book</Text>
+<TextInput
+  value={bookSearch}
+  onChangeText={updateBookSearchText}
+  placeholder="Search by title or author"
+  placeholderTextColor="#a89584"
+  style={styles.modalInput}
+/>
+<TouchableOpacity
+  style={styles.bookSearchButton}
+  onPress={() => searchBooks(bookSearch)}
+  activeOpacity={0.85}
+>
+  <Text style={styles.bookSearchButtonText}>Search books</Text>
+</TouchableOpacity>
+{bookSearching ? (
+  <Text style={styles.bookSearchHint}>Searching books...</Text>
+) : null}
 
-          <Text style={styles.inputLabel}>Current book</Text>
-          <TextInput
-            value={currentBook}
-            onChangeText={setCurrentBook}
-            placeholder="Fourth Wing"
-            placeholderTextColor="#a89584"
-            style={styles.modalInput}
-          />
+{bookResults.length > 0 ? (
+  <View style={styles.bookResultsBox}>
+    {bookResults.map((book: any) => (
+      <TouchableOpacity
+  key={book.key}
+  style={styles.bookResultRow}
+  onPress={() => selectBook(book)}
+  activeOpacity={0.8}
+>
+  <Image
+    source={{ uri: book.coverUrl }}
+    style={styles.bookResultCover}
+  />
 
-          <Text style={styles.inputLabel}>Author</Text>
-          <TextInput
-            value={currentAuthor}
-            onChangeText={setCurrentAuthor}
-            placeholder="Rebecca Yarros"
-            placeholderTextColor="#a89584"
-            style={styles.modalInput}
-          />
+  <View style={styles.bookResultInfo}>
+    <Text style={styles.bookResultTitle}>{book.title}</Text>
+
+    {!!book.author && (
+      <Text style={styles.bookResultAuthor}>
+        {book.author}
+        {book.year ? ` • ${book.year}` : ""}
+      </Text>
+    )}
+  </View>
+</TouchableOpacity>
+    ))}
+  </View>
+) : null}
 
           <View style={styles.moderationNote}>
             <Ionicons name="shield-checkmark-outline" size={18} color="#7a5137" />
@@ -597,6 +1042,7 @@ function CreateClubModal({
   {isEditing ? "Save Changes" : "Create Club"}
 </Text>
           </TouchableOpacity>
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -765,25 +1211,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginTop: 1,
   },
-  filterRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 14,
-  },
-  filterPill: {
-    backgroundColor: "rgba(255,250,243,0.84)",
-    borderWidth: 1,
-    borderColor: "#eadcc9",
-    paddingHorizontal: 13,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  filterText: {
-    fontSize: 15,
-    color: "#514841",
-    fontWeight: "500",
-  },
+
   yourClubCard: {
     width: 238,
     backgroundColor: "rgba(255,250,243,0.9)",
@@ -886,6 +1314,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderColor: "#eadcc9",
+    marginBottom: 0,
   },
   discoverEmptyTitle: {
     fontSize: 23,
@@ -947,22 +1376,27 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     fontSize: 13,
   },
-  modalBackdrop: {
+modalBackdrop: {
   flex: 1,
-  justifyContent: "flex-start",
+  justifyContent: "flex-end",
   backgroundColor: "rgba(44,31,24,0.28)",
-  paddingTop: 70,
 },
-  modalCard: {
-    backgroundColor: "#fffaf3",
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 38,
-    borderWidth: 1,
-    borderColor: "#eadcc9",
-  },
+
+modalCard: {
+  backgroundColor: "#fffaf3",
+  borderTopLeftRadius: 34,
+  borderTopRightRadius: 34,
+  borderBottomLeftRadius: 34,
+  borderBottomRightRadius: 34,
+  paddingHorizontal: 20,
+  paddingTop: 18,
+  paddingBottom: 24,
+  borderWidth: 1,
+  borderColor: "#eadcc9",
+  maxHeight: "88%",
+  marginHorizontal: 0,
+  marginBottom: 0,
+},
   modalHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1064,34 +1498,6 @@ editClubButton: {
 requestButtonRequested: {
   backgroundColor: "#8a7d74",
 },
-themePickerRow: {
-  gap: 12,
-  paddingBottom: 12,
-},
-
-themeOption: {
-  width: 118,
-},
-
-themeOptionSelected: {
-  opacity: 1,
-},
-
-themeOptionImage: {
-  width: 118,
-  height: 150,
-  borderRadius: 18,
-  borderWidth: 2,
-  borderColor: "transparent",
-},
-
-themeOptionText: {
-  marginTop: 6,
-  color: "#514841",
-  fontSize: 13,
-  fontWeight: "600",
-  textAlign: "center",
-},
 
 roomArtImage: {
   width: "100%",
@@ -1123,5 +1529,329 @@ pendingApprovalText: {
   color: "#fff",
   fontSize: 12,
   fontWeight: "700",
+},
+themeImageOverlay: {
+  ...StyleSheet.absoluteFillObject,
+  backgroundColor: "rgba(30, 20, 12, 0.18)",
+},
+modalScrollContent: {
+  paddingBottom: 24,
+},
+
+themePickerRow: {
+  gap: 12,
+  paddingBottom: 14,
+},
+
+themeOption: {
+  width: 110,
+  opacity: 0.72,
+},
+
+themeOptionSelected: {
+  opacity: 1,
+  transform: [{ scale: 1.04 }],
+},
+
+themeOptionImage: {
+  width: 110,
+  height: 135,
+  borderRadius: 16,
+  borderWidth: 3,
+  borderColor: "transparent",
+},
+
+themeOptionText: {
+  marginTop: 6,
+  color: "#514841",
+  fontSize: 12,
+  fontWeight: "600",
+  textAlign: "center",
+},
+bookSearchHint: {
+  marginTop: 6,
+  color: "#8a725f",
+  fontSize: 13,
+},
+
+bookResultsBox: {
+  marginTop: 8,
+  backgroundColor: "#f8f0e6",
+  borderWidth: 1,
+  borderColor: "#eadcc9",
+  borderRadius: 18,
+  overflow: "hidden",
+},
+
+bookResultRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+  borderBottomWidth: 1,
+  borderBottomColor: "#eadcc9",
+},
+
+bookResultTitle: {
+  color: "#514841",
+  fontSize: 15,
+  fontWeight: "600",
+},
+
+bookResultAuthor: {
+  marginTop: 2,
+  color: "#8a725f",
+  fontSize: 13,
+},
+bookResultCover: {
+  width: 44,
+  height: 64,
+  borderRadius: 6,
+  backgroundColor: "#eadcc9",
+  marginRight: 10,
+},
+
+bookResultInfo: {
+  flex: 1,
+},
+bookSearchButton: {
+  marginTop: 8,
+  backgroundColor: "#eadcc9",
+  borderRadius: 16,
+  paddingVertical: 10,
+  alignItems: "center",
+},
+
+bookSearchButtonText: {
+  color: "#514841",
+  fontSize: 14,
+  fontWeight: "600",
+},
+
+friendUpdatesList: {
+  gap: 10,
+  marginBottom: 24,
+  marginTop: 4,
+},
+
+friendUpdateCard: {
+  backgroundColor: "rgba(255,250,243,0.88)",
+  borderRadius: 22,
+  borderWidth: 1,
+  borderColor: "#eadcc9",
+  padding: 12,
+  flexDirection: "row",
+  alignItems: "center",
+},
+
+friendAvatar: {
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  backgroundColor: "#eadcc9",
+  alignItems: "center",
+  justifyContent: "center",
+  marginRight: 10,
+},
+
+friendAvatarText: {
+  color: "#514841",
+  fontSize: 18,
+  fontWeight: "700",
+},
+
+friendUpdateBody: {
+  flex: 1,
+},
+
+friendUpdateText: {
+  color: "#514841",
+  fontSize: 15,
+  lineHeight: 20,
+},
+
+friendUpdateName: {
+  fontWeight: "700",
+},
+
+friendUpdateTime: {
+  color: "#8a725f",
+  fontSize: 13,
+  marginTop: 2,
+},
+
+heartButton: {
+  alignItems: "center",
+  justifyContent: "center",
+  paddingLeft: 10,
+},
+
+heartCount: {
+  color: "#7a5137",
+  fontSize: 12,
+  marginTop: 1,
+},
+friendUpdatesSection: {
+  marginTop: 18,
+},
+readerModalBackdrop: {
+  flex: 1,
+  backgroundColor: "rgba(33, 24, 18, 0.42)",
+  justifyContent: "center",
+  paddingHorizontal: 20,
+},
+
+readerModalCard: {
+  backgroundColor: "#fffaf3",
+  borderRadius: 32,
+  padding: 20,
+  maxHeight: "82%",
+  borderWidth: 1,
+  borderColor: "#eadcc9",
+},
+
+readerModalHeader: {
+  flexDirection: "row",
+  alignItems: "flex-start",
+  marginBottom: 18,
+},
+
+readerAvatarLarge: {
+  width: 120,
+  height: 150,
+  resizeMode: "contain",
+  marginRight: 18,
+},
+
+readerInfo: {
+  flex: 1,
+},
+
+readerName: {
+  fontSize: 30,
+  color: "#514841",
+  fontFamily: FONT_HEAD,
+  fontWeight: "600",
+},
+
+readerUsername: {
+  color: "#8a725f",
+  fontSize: 15,
+  marginTop: -2,
+},
+
+readerGoalText: {
+  marginTop: 12,
+  color: "#514841",
+  fontSize: 14,
+  fontWeight: "600",
+},
+
+readerGoalBarBg: {
+  marginTop: 8,
+  height: 8,
+  borderRadius: 999,
+  backgroundColor: "#eadcc9",
+  overflow: "hidden",
+},
+
+readerGoalBarFill: {
+  height: "100%",
+  backgroundColor: "#7a5137",
+  borderRadius: 999,
+},
+
+readerCloseButton: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  backgroundColor: "#f1e6d8",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+readerCurrentBookCard: {
+  flexDirection: "row",
+  backgroundColor: "#f6efe5",
+  borderRadius: 22,
+  padding: 12,
+  marginBottom: 18,
+},
+
+readerBookCover: {
+  width: 72,
+  height: 108,
+  borderRadius: 12,
+  marginRight: 14,
+  backgroundColor: "#eadcc9",
+},
+
+readerCurrentBookInfo: {
+  flex: 1,
+  justifyContent: "center",
+},
+
+readerCurrentLabel: {
+  color: "#9d8b7c",
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: 1.4,
+  marginBottom: 6,
+},
+
+readerCurrentTitle: {
+  color: "#514841",
+  fontSize: 22,
+  fontFamily: FONT_HEAD,
+  fontWeight: "600",
+},
+
+readerCurrentAuthor: {
+  color: "#8a725f",
+  fontSize: 15,
+  marginTop: 2,
+},
+
+readerUpdatesTitle: {
+  color: "#514841",
+  fontSize: 24,
+  fontFamily: FONT_HEAD,
+  fontWeight: "600",
+  marginBottom: 10,
+},
+
+readerUpdatesScroll: {
+  maxHeight: 220,
+},
+
+readerUpdateRow: {
+  flexDirection: "row",
+  alignItems: "flex-start",
+  marginBottom: 12,
+},
+
+readerUpdateBullet: {
+  color: "#7a5137",
+  fontSize: 14,
+  marginRight: 8,
+  marginTop: 1,
+},
+
+readerUpdateText: {
+  flex: 1,
+  color: "#514841",
+  fontSize: 15,
+  lineHeight: 20,
+},
+readerUpdateHeartButton: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginLeft: 12,
+},
+
+readerUpdateHeartCount: {
+  color: "#7a5137",
+  fontSize: 12,
+  marginLeft: 4,
 },
 });
